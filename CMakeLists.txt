@@ -1,8 +1,13 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(CSJImageView VERSION 0.1 LANGUAGES CXX)
+set(TARGET_NAME CSJImageView)
+
+project(${TARGET_NAME} VERSION 0.1 LANGUAGES CXX)
 
 add_definitions("-DUNICODE" "-D_UNICODE")
+
+set(CSJIMAGEVIEW_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
+set(THIRD_PARTY_DIR "${CSJIMAGEVIEW_ROOT_DIR}/3rdParts")
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -15,34 +20,43 @@ set(PROJECT_SOURCES
         Utils/CSJPathTool.cc
 )
 
+if(WIN32)
 set(Vulkan_DIR $ENV{VULKAN_SDK})
 set(Vulkan_Lib_DIR ${VulkanDIR}/Lib/cmake)
 set(vulkan_lib ${Vulkan_DIR}/Lib/vulkan-1.lib)
-#find_package(Vulkan REQUIRED)
-
+elseif(APPLE)
+set(Vulkan_DIR "/Users/xiuhaozhong/DevEnvironments/VulkanSDK/1.4.304.0/macOS")
+set(vulkan_lib ${Vulkan_DIR}/Lib/libvulkan.1.dylib)
+endif()
 include_directories(Utils 3rdParts/glfw3/include/ 3rdParts/stbi/ ${Vulkan_DIR}/Include)
+set(glfw_include ${THIRD_PARTY_DIR}/glfw/include)
 
-link_directories(3rdParts/glfw3/lib/)
+#link_directories(3rdParts/glfw3/lib/)
 
 if(CMAKE_HOST_WIN32)
 set(Native_LIBS shlwapi)
 else()
-set(Native_LIBS shlwapi)
+set(Native_LIBS )
 endif()
 
-add_executable(CSJImageView
+add_executable(${TARGET_NAME}
             ${PROJECT_SOURCES}
 )
 
-target_link_libraries(CSJImageView PRIVATE glfw3 ${vulkan_lib} ${Native_LIBS})
+target_link_libraries(${TARGET_NAME} PRIVATE ${vulkan_lib} ${Native_LIBS})
+target_link_libraries(${TARGET_NAME} PUBLIC glfw)
 
-set_target_properties(CSJImageView PROPERTIES
+target_include_directories(${TARGET_NAME} PUBLIC $<BUILD_INTERFACE:${glew_include}>)
+
+set_target_properties(${TARGET_NAME} PROPERTIES
     ${BUNDLE_ID_OPTION}
     MACOSX_BUNDLE_BUNDLE_VERSION ${PROJECT_VERSION}
     MACOSX_BUNDLE_SHORT_VERSION_STRING ${PROJECT_VERSION_MAJOR}.${PROJECT_VERSION_MINOR}
     MACOSX_BUNDLE TRUE
     WIN32_EXECUTABLE TRUE
 )
+
+add_subdirectory(${THIRD_PARTY_DIR})
 
 include(GNUInstallDirs)
 install(TARGETS CSJImageView
