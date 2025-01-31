@@ -176,6 +176,7 @@ void CSJApplication::cleanup() {
         vkFreeMemory(m_device, m_uniform_buffer_memories[i], nullptr);
     }
 
+    vkDestroyDescriptorPool(m_device, m_descriptor_pool, nullptr);
     vkDestroyDescriptorSetLayout(m_device, m_descriptorset_layout, nullptr);
 
     vkDestroyBuffer(m_device, m_index_buffer, nullptr);
@@ -235,6 +236,9 @@ void CSJApplication::createInstance() {
     auto extensions = getRequiredExtensions();
     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
     createInfo.ppEnabledExtensionNames = extensions.data();
+#ifdef __APPLE__ 
+    createInfo.flags |= VK_INSTANCE_CREATE_ENUMERATE_PORTABILITY_BIT_KHR;
+#endif 
 
     VkDebugUtilsMessengerCreateInfoEXT debugCreateInfo{};
     if (m_enable_validation_Layers) {
@@ -293,8 +297,8 @@ std::vector<const char *> CSJApplication::getRequiredExtensions() {
 
 #if defined(__MACH__)
     extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
+    extensions.push_back( VK_KHR_PORTABILITY_ENUMERATION_EXTENSION_NAME );
 #endif
-
     return extensions;
 }
 

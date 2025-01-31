@@ -1,6 +1,10 @@
 #include "CSJApplication.h"
 
+#ifdef __WIN32
 int WinMain() {
+#elif __APPLE__
+int main(int argc, char* avgv[]) {
+#endif 
     CSJApplication app;
 
     try {
