@@ -6,6 +6,8 @@ project(${TARGET_NAME} VERSION 0.1 LANGUAGES CXX)
 
 add_definitions("-DUNICODE" "-D_UNICODE")
 
+add_compile_definitions(STB_IMAGE_IMPLEMENTATION)
+
 set(CSJIMAGEVIEW_ROOT_DIR "${CMAKE_CURRENT_SOURCE_DIR}")
 set(THIRD_PARTY_DIR "${CSJIMAGEVIEW_ROOT_DIR}/3rdParts")
 
@@ -31,8 +33,6 @@ endif()
 include_directories(Utils 3rdParts/glfw3/include/ 3rdParts/stbi/ ${Vulkan_DIR}/Include)
 set(glfw_include ${THIRD_PARTY_DIR}/glfw/include)
 
-#link_directories(3rdParts/glfw3/lib/)
-
 if(CMAKE_HOST_WIN32)
 set(Native_LIBS shlwapi)
 else()
@@ -46,7 +46,7 @@ add_executable(${TARGET_NAME}
 target_link_libraries(${TARGET_NAME} PRIVATE ${vulkan_lib} ${Native_LIBS})
 target_link_libraries(${TARGET_NAME} PUBLIC glfw)
 
-target_include_directories(${TARGET_NAME} PUBLIC $<BUILD_INTERFACE:${glew_include}>)
+target_include_directories(${TARGET_NAME} PUBLIC $<BUILD_INTERFACE:${glfw_include}>)
 
 set_target_properties(${TARGET_NAME} PROPERTIES
     ${BUNDLE_ID_OPTION}
