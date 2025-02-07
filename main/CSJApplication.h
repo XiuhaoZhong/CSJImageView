@@ -2,7 +2,7 @@
 #define __CSJAPPLICATION_H__
 
 #define GLFW_INCLUDE_VULKAN
-#include "GLFW/glfw3.h"
+#include <GLFW/glfw3.h>
 
 #include <vector>
 #include <optional>
@@ -94,6 +94,20 @@ protected:
     void createVertexBuffer();
     void createIndexBuffer();
 
+    void createTextureImage();
+    void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling,
+                     VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
+                     VkImage& image, VkDeviceMemory& imageMemory);
+    void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
+    void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
+
+    void createTextureImageView();
+    void createTextureImageSampler();
+
+    VkCommandBuffer beginSingleTimeCommands();
+    void endSingleTimeCommands(VkCommandBuffer commandBuffer);
+
+    VkImageView createImageView(VkImage image, VkFormat format);
     void createBuffer(VkDeviceSize size, 
                       VkBufferUsageFlags usage, 
                       VkMemoryPropertyFlags properties,
@@ -145,6 +159,11 @@ private:
 
     VkBuffer         m_index_buffer;
     VkDeviceMemory   m_index_buffer_memory;
+
+    VkImage          m_texture_image;
+    VkDeviceMemory   m_texture_image_momery;
+    VkImageView      m_texture_imageview;
+    VkSampler        m_texture_image_sampler;
 
     std::vector<VkBuffer>       m_uniform_buffers;
     std::vector<VkDeviceMemory> m_uniform_buffer_memories;
