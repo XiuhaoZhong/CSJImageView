@@ -1,6 +1,6 @@
 #include "CSJApplication.h"
 
-#ifdef __WIN32
+#ifdef _WIN32
 int WinMain() {
 #elif __APPLE__
 int main(int argc, char* avgv[]) {
