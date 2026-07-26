@@ -1,24 +1,22 @@
-#include "CSJApplication.h"
+#include "CSJVulkanRenderer.h"
 
+#include <iostream>
 #include <fstream>
 #include <set>
-#include <vector>
-#include <array>
-#include <limits>
-#include <cstring>
 #include <algorithm>
+#include <thread>
 #include <chrono>
+#include <array>
 
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
-#include "CSJPathTool.h"
+// #include "Utils/CSJPathTool.h"
 
 //#define STB_IMAGE_IMPLEMENETATION
 #include "stb_image.h"
 
-const uint32_t WIDTH = 800;
-const uint32_t HEIGHT = 600;
+namespace csjrhi {
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
 
@@ -91,14 +89,64 @@ static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityF
     return VK_FALSE;
 }
 
-void CSJApplication::run() {
-    initWindow();
-    initVulkan();
-    mainLoop();
-    cleanup();
+CSJVulkanRenderer::~CSJVulkanRenderer() {
+
 }
 
-void CSJApplication::resizeFramebuffer(int width, int height) {
+bool CSJVulkanRenderer::Init(void *windowHandle, int width, int height) {
+    if (!windowHandle || width == 0 || height == 0) {
+        return false;
+    }
+
+    m_pWindow = (GLFWwindow *)windowHandle;
+
+    std::cout << "CSJVulkan Renderer initialize success." << std::endl;
+    return true;
+}
+
+void CSJVulkanRenderer::Shutdown() {
+    std::cout << "CSJVulkan Renderer shutdown." << std::endl;
+}
+
+void CSJVulkanRenderer::Resize(int width, int height) {
+
+}
+
+void CSJVulkanRenderer::Render() {
+    std::cout << "CSJVulkan Renderer renders a frame." << std::endl;
+}
+
+void CSJVulkanRenderer::WaitIdle() {
+    static int counter = 0;
+    std::cout << "CSJVulkan Renderer waits for idle, frame: " << counter++ << std::endl;
+    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+}
+
+uint32_t CSJVulkanRenderer::CreateTexture(int width, int height, int format, const void *data) {
+    return 0;
+}
+
+void CSJVulkanRenderer::DestroyTexture(uint32_t textureId) {
+
+}
+
+void CSJVulkanRenderer::UpdateTexture(uint32_t textureId, const void *data) {
+}
+
+std::string CSJVulkanRenderer::GetBackendName() const {
+    return std::string();
+}
+
+float CSJVulkanRenderer::GetLastFrameTime() const {
+    return 0.0f;
+}
+
+const CSJRendererCapabilities &CSJVulkanRenderer::GetCapabilities() const {
+    // TODO: insert return statement here
+    return m_renderCaps;
+}
+
+void CSJVulkanRenderer::resizeFramebuffer(int width, int height) {
     while (width == 0 || height == 0) {
         glfwGetFramebufferSize(m_pWindow, &width, &height);
         glfwWaitEvents();
@@ -113,42 +161,7 @@ void CSJApplication::resizeFramebuffer(int width, int height) {
     createFrameBuffers();
 }
 
-void CSJApplication::framebufferResiceCallback(GLFWwindow *window, int width, int height) {
-    CSJApplication *app = static_cast<CSJApplication *>(glfwGetWindowUserPointer(window));
-    app->resizeFramebuffer(width, height);
-}
-
-void CSJApplication::initWindow() {
-    std::cout << " enter init window function " << std::endl;
-    glfwInit();
-
-    glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
-
-    m_pWindow = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
-    glfwSetWindowUserPointer(m_pWindow, this);
-    glfwSetFramebufferSizeCallback(m_pWindow, framebufferResiceCallback);
-
-#ifndef NDEBUG
-    m_enable_validation_Layers = true;
-    m_enable_debug_utils_label = true;
-#else
-    m_enable_validation_Layers = false;
-    m_enable_debug_utils_label = false;
-#endif
-}
-
-void CSJApplication::mainLoop() {
-    while (!glfwWindowShouldClose(m_pWindow)) {
-        glfwPollEvents();
-
-        drawFrame();
-    }
-
-    vkDeviceWaitIdle(m_device);
-}
-
-void CSJApplication::initVulkan() {
+void CSJVulkanRenderer::initVulkan() {
     createInstance();
     createSurface();
     pickPhysicalDevice();
@@ -172,7 +185,7 @@ void CSJApplication::initVulkan() {
     createSyncObjects();
 }
 
-void CSJApplication::cleanup() {
+void CSJVulkanRenderer::cleanup() {
     if (m_enable_validation_Layers) {
         
     }
@@ -224,7 +237,7 @@ void CSJApplication::cleanup() {
     glfwTerminate();
 }
 
-void CSJApplication::cleanupSwapChain() {
+void CSJVulkanRenderer::cleanupSwapChain() {
     for (auto framebuffer : m_swapchain_frame_buffers) {
         vkDestroyFramebuffer(m_device, framebuffer, nullptr);
     }
@@ -236,7 +249,7 @@ void CSJApplication::cleanupSwapChain() {
     vkDestroySwapchainKHR(m_device, m_swapchain, nullptr);
 }
 
-void CSJApplication::createInstance() {
+void CSJVulkanRenderer::createInstance() {
     if (m_enable_validation_Layers && !checkValidationLayerSupport()) {
         return;
     }
@@ -281,7 +294,7 @@ void CSJApplication::createInstance() {
     }
 }
 
-bool CSJApplication::checkValidationLayerSupport() {
+bool CSJVulkanRenderer::checkValidationLayerSupport() {
     uint32_t layerCount;
     vkEnumerateInstanceLayerProperties(&layerCount, nullptr);
 
@@ -306,7 +319,7 @@ bool CSJApplication::checkValidationLayerSupport() {
     return true;
 }
 
-std::vector<const char *> CSJApplication::getRequiredExtensions() {
+std::vector<const char *> CSJVulkanRenderer::getRequiredExtensions() {
     uint32_t     glfwExtensionCount = 0;
     const char **glfwExtensions;
     glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
@@ -324,7 +337,7 @@ std::vector<const char *> CSJApplication::getRequiredExtensions() {
     return extensions;
 }
 
-void CSJApplication::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo) {
+void CSJVulkanRenderer::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreateInfoEXT &createInfo) {
     createInfo = {};
     createInfo.sType = VK_STRUCTURE_TYPE_DEBUG_UTILS_MESSENGER_CREATE_INFO_EXT;
     createInfo.messageSeverity =
@@ -335,7 +348,7 @@ void CSJApplication::populateDebugMessengerCreateInfo(VkDebugUtilsMessengerCreat
     createInfo.pUserData = nullptr;
 }
 
-void CSJApplication::pickPhysicalDevice() {
+void CSJVulkanRenderer::pickPhysicalDevice() {
     uint32_t deviceCount = 0;
     vkEnumeratePhysicalDevices(m_VkInstance, &deviceCount, nullptr);
 
@@ -358,7 +371,7 @@ void CSJApplication::pickPhysicalDevice() {
     }
 }
 
-bool CSJApplication::isDeviceSuitable(VkPhysicalDevice device) {
+bool CSJVulkanRenderer::isDeviceSuitable(VkPhysicalDevice device) {
     QueueFamilyIndices indices = findQueueFamilies(device);
 
     bool extensionsSupported = checkDeviceExtensionSupport(device);
@@ -372,7 +385,7 @@ bool CSJApplication::isDeviceSuitable(VkPhysicalDevice device) {
     return indices.isComplete() && extensionsSupported && swapChainAdequate;
 }
 
-QueueFamilyIndices CSJApplication::findQueueFamilies(VkPhysicalDevice device) {
+QueueFamilyIndices CSJVulkanRenderer::findQueueFamilies(VkPhysicalDevice device) {
     QueueFamilyIndices indices;
 
     uint32_t queueFamilyCount = 0;
@@ -404,7 +417,7 @@ QueueFamilyIndices CSJApplication::findQueueFamilies(VkPhysicalDevice device) {
     return indices;
 }
 
-void CSJApplication::createLogicalDevice() {
+void CSJVulkanRenderer::createLogicalDevice() {
     QueueFamilyIndices indices = findQueueFamilies(m_physical_device);
 
     std::vector<VkDeviceQueueCreateInfo> queueCreateInfos;
@@ -448,13 +461,13 @@ void CSJApplication::createLogicalDevice() {
     vkGetDeviceQueue(m_device, indices.m_present_family.value(), 0, &m_present_queue);
 }
 
-void CSJApplication::createSurface() {
+void CSJVulkanRenderer::createSurface() {
     if (glfwCreateWindowSurface(m_VkInstance, m_pWindow, nullptr, &m_surface) != VK_SUCCESS) {
         throw std::runtime_error("failed to create window surface!");
     }
 }
 
-void CSJApplication::createSwapChain() {
+void CSJVulkanRenderer::createSwapChain() {
     SwapChainSupportDetails swapChainSupport = querySwapChainSupport(m_physical_device);
 
     VkSurfaceFormatKHR surfaceFormat = chooseSwapSurfaceFormat(swapChainSupport.formats);
@@ -508,7 +521,7 @@ void CSJApplication::createSwapChain() {
     m_swapchain_extent = extent;
 }
 
-void CSJApplication::recreateSwapChain() {
+void CSJVulkanRenderer::recreateSwapChain() {
     int width, height;
     glfwGetFramebufferSize(m_pWindow, &width, &height);
     while (width != 0 || height != 0) {
@@ -525,7 +538,7 @@ void CSJApplication::recreateSwapChain() {
     createFrameBuffers();
 }
 
-void CSJApplication::createImageViews() {
+void CSJVulkanRenderer::createImageViews() {
     m_swapchain_imageViews.resize(m_swapchain_images.size());
 
     for (size_t i = 0; i < m_swapchain_images.size(); i++) {
@@ -550,7 +563,7 @@ void CSJApplication::createImageViews() {
     }
 }
 
-std::vector<char> CSJApplication::readFile(const std::string &filename) {
+std::vector<char> CSJVulkanRenderer::readFile(const std::string &filename) {
     std::ifstream file(filename, std::ios::ate | std::ios::binary);
     if (!file.is_open()) {
         throw std::runtime_error("failed to open file");
@@ -566,7 +579,7 @@ std::vector<char> CSJApplication::readFile(const std::string &filename) {
     return buffer;
 }
 
-VkShaderModule CSJApplication::createShaderModule(const std::vector<char> &code) {
+VkShaderModule CSJVulkanRenderer::createShaderModule(const std::vector<char> &code) {
     VkShaderModuleCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_SHADER_MODULE_CREATE_INFO;
     createInfo.codeSize = code.size();
@@ -580,7 +593,7 @@ VkShaderModule CSJApplication::createShaderModule(const std::vector<char> &code)
     return shaderModule;
 }
 
-void CSJApplication::createGraphicsPipeline() {
+void CSJVulkanRenderer::createGraphicsPipeline() {
     auto vertShaderCode = readFile("resources/shaders/vert.spv");
     auto fragShaderCode = readFile("resources/shaders/frag.spv");
 
@@ -701,7 +714,7 @@ void CSJApplication::createGraphicsPipeline() {
     vkDestroyShaderModule(m_device, vertShaderModule, nullptr);
 }
 
-void CSJApplication::createRenderPass() {
+void CSJVulkanRenderer::createRenderPass() {
     VkAttachmentDescription colorAttachment{};
     colorAttachment.format          = m_swapchain_image_format;
     colorAttachment.samples         = VK_SAMPLE_COUNT_1_BIT;
@@ -743,7 +756,7 @@ void CSJApplication::createRenderPass() {
     }
 }
 
-void CSJApplication::createFrameBuffers() {
+void CSJVulkanRenderer::createFrameBuffers() {
     m_swapchain_frame_buffers.resize(m_swapchain_imageViews.size());
 
     for (size_t i = 0; i < m_swapchain_imageViews.size(); i++) {
@@ -767,7 +780,7 @@ void CSJApplication::createFrameBuffers() {
     }
 }
 
-void CSJApplication::createCommandPool() {
+void CSJVulkanRenderer::createCommandPool() {
     QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_physical_device);
 
     VkCommandPoolCreateInfo poolInfo{};
@@ -780,7 +793,7 @@ void CSJApplication::createCommandPool() {
     }
 }
 
-void CSJApplication::createCommandBuffer() {
+void CSJVulkanRenderer::createCommandBuffer() {
     m_command_buffers.resize(MAX_FRAMES_IN_FLIGHT);
 
     VkCommandBufferAllocateInfo allocInfo{};
@@ -794,7 +807,7 @@ void CSJApplication::createCommandBuffer() {
     }
 }
 
-void CSJApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
+void CSJVulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
 
@@ -850,7 +863,7 @@ void CSJApplication::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t
     }
 }
 
-void CSJApplication::createSyncObjects() {
+void CSJVulkanRenderer::createSyncObjects() {
     VkSemaphoreCreateInfo semaphoreInfo{};
     semaphoreInfo.sType = VK_STRUCTURE_TYPE_SEMAPHORE_CREATE_INFO;
 
@@ -877,7 +890,7 @@ void CSJApplication::createSyncObjects() {
     }
 }
 
-void CSJApplication::createDescriptorSetLayout() {
+void CSJVulkanRenderer::createDescriptorSetLayout() {
     VkDescriptorSetLayoutBinding uboLayoutBinding{};
     uboLayoutBinding.binding            = 0;
     uboLayoutBinding.descriptorCount    = 1;
@@ -903,7 +916,7 @@ void CSJApplication::createDescriptorSetLayout() {
     }
 }
 
-void CSJApplication::createDescriptorPool() {
+void CSJVulkanRenderer::createDescriptorPool() {
     std::array<VkDescriptorPoolSize, 2> poolSizes{};
     poolSizes[0].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
     poolSizes[0].descriptorCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
@@ -921,7 +934,7 @@ void CSJApplication::createDescriptorPool() {
     }
 }
 
-void CSJApplication::createDescriptorSets() {
+void CSJVulkanRenderer::createDescriptorSets() {
     std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, m_descriptorset_layout);
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
@@ -970,7 +983,7 @@ void CSJApplication::createDescriptorSets() {
     }
 }
 
-void CSJApplication::createUniformBuffers() {
+void CSJVulkanRenderer::createUniformBuffers() {
     VkDeviceSize bufferSize = sizeof(UniformBufferObject);
 
     m_uniform_buffers.resize(MAX_FRAMES_IN_FLIGHT);
@@ -988,7 +1001,7 @@ void CSJApplication::createUniformBuffers() {
     }
 }
 
-void CSJApplication::createVertexBuffer() {
+void CSJVulkanRenderer::createVertexBuffer() {
 
     std::vector<Vertex> current_vertices = img_vertices;
     VkDeviceSize bufferSize = sizeof(current_vertices[0]) * current_vertices.size();
@@ -1017,7 +1030,7 @@ void CSJApplication::createVertexBuffer() {
     vkFreeMemory(m_device, stagingBufferMemory, nullptr);
 }
 
-void CSJApplication::createIndexBuffer() {
+void CSJVulkanRenderer::createIndexBuffer() {
     VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
 
     VkBuffer stagingBuffer;
@@ -1042,7 +1055,7 @@ void CSJApplication::createIndexBuffer() {
     vkFreeMemory(m_device, stagingBufferMemory, nullptr);
 }
 
-void CSJApplication::createTextureImage() {
+void CSJVulkanRenderer::createTextureImage() {
     int texWidth, texHeight, texChannels;
     stbi_uc* pixels = stbi_load("resources/originImages/slamDumk_images/cross_street.jpeg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
@@ -1081,7 +1094,7 @@ void CSJApplication::createTextureImage() {
     vkFreeMemory(m_device, stagingBufferMemory, nullptr);
 }
 
-void CSJApplication::createImage(uint32_t width, uint32_t height, VkFormat format, 
+void CSJVulkanRenderer::createImage(uint32_t width, uint32_t height, VkFormat format, 
                                  VkImageTiling tiling, 
                                  VkImageUsageFlags usage, VkMemoryPropertyFlags properties, 
                                  VkImage &image, VkDeviceMemory &imageMemory) {
@@ -1119,7 +1132,7 @@ void CSJApplication::createImage(uint32_t width, uint32_t height, VkFormat forma
     vkBindImageMemory(m_device, image, imageMemory, 0);
 }
 
-void CSJApplication::transitionImageLayout(VkImage image, VkFormat format, 
+void CSJVulkanRenderer::transitionImageLayout(VkImage image, VkFormat format, 
                                            VkImageLayout oldLayout, VkImageLayout newLayout) {
     VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
@@ -1174,7 +1187,7 @@ void CSJApplication::transitionImageLayout(VkImage image, VkFormat format,
     endSingleTimeCommands(commandBuffer);
 }
 
-void CSJApplication::copyBufferToImage(VkBuffer buffer, VkImage image, 
+void CSJVulkanRenderer::copyBufferToImage(VkBuffer buffer, VkImage image, 
                                        uint32_t width, uint32_t height) {
     VkCommandBuffer commandBuffer = beginSingleTimeCommands();
 
@@ -1198,11 +1211,11 @@ void CSJApplication::copyBufferToImage(VkBuffer buffer, VkImage image,
     endSingleTimeCommands(commandBuffer);
 }
 
-void CSJApplication::createTextureImageView() {
+void CSJVulkanRenderer::createTextureImageView() {
     m_texture_imageview = createImageView(m_texture_image, VK_FORMAT_R8G8B8A8_SRGB);
 }
 
-void CSJApplication::createTextureImageSampler() {
+void CSJVulkanRenderer::createTextureImageSampler() {
     VkPhysicalDeviceProperties properties{};
     vkGetPhysicalDeviceProperties(m_physical_device, &properties);
 
@@ -1226,7 +1239,7 @@ void CSJApplication::createTextureImageSampler() {
     }
 }
 
-VkCommandBuffer CSJApplication::beginSingleTimeCommands() {
+VkCommandBuffer CSJVulkanRenderer::beginSingleTimeCommands() {
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -1245,7 +1258,7 @@ VkCommandBuffer CSJApplication::beginSingleTimeCommands() {
     return commandBuffer; 
 }
 
-void CSJApplication::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
+void CSJVulkanRenderer::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
     vkEndCommandBuffer(commandBuffer);
 
     VkSubmitInfo submitInfo{};
@@ -1259,7 +1272,7 @@ void CSJApplication::endSingleTimeCommands(VkCommandBuffer commandBuffer) {
     vkFreeCommandBuffers(m_device, m_command_pool, 1, &commandBuffer);
 }
 
-VkImageView CSJApplication::createImageView(VkImage image, VkFormat format) {
+VkImageView CSJVulkanRenderer::createImageView(VkImage image, VkFormat format) {
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
     viewInfo.image = image;
@@ -1279,7 +1292,7 @@ VkImageView CSJApplication::createImageView(VkImage image, VkFormat format) {
     return imageView;
 }
 
-void CSJApplication::createBuffer(VkDeviceSize size,
+void CSJVulkanRenderer::createBuffer(VkDeviceSize size,
                                   VkBufferUsageFlags usage,
                                   VkMemoryPropertyFlags properties,
                                   VkBuffer &buffer,
@@ -1310,7 +1323,7 @@ void CSJApplication::createBuffer(VkDeviceSize size,
     vkBindBufferMemory(m_device, buffer, bufferMemory, 0);
 }
 
-void CSJApplication::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
+void CSJVulkanRenderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size) {
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
@@ -1343,7 +1356,7 @@ void CSJApplication::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDevice
     vkFreeCommandBuffers(m_device, m_command_pool, 1, &commandBuffer);
 }
 
-void CSJApplication::updateUniformBuffer(uint32_t currentImage) {
+void CSJVulkanRenderer::updateUniformBuffer(uint32_t currentImage) {
     static auto startTime = std::chrono::high_resolution_clock::now();
 
     auto currentTime = std::chrono::high_resolution_clock::now();
@@ -1359,7 +1372,7 @@ void CSJApplication::updateUniformBuffer(uint32_t currentImage) {
     memcpy(m_uniform_buffer_mappeds[m_current_frame], &ubo, sizeof(ubo));
 }
 
-void CSJApplication::drawFrame() {
+void CSJVulkanRenderer::drawFrame() {
     vkWaitForFences(m_device, 1, &m_in_flight_fences[m_current_frame], VK_TRUE, UINT64_MAX);
     vkResetFences(m_device, 1, &m_in_flight_fences[m_current_frame]);
 
@@ -1407,7 +1420,7 @@ void CSJApplication::drawFrame() {
     m_current_frame = (m_current_frame + 1) % MAX_FRAMES_IN_FLIGHT;
 }
 
-VkSurfaceFormatKHR CSJApplication::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
+VkSurfaceFormatKHR CSJVulkanRenderer::chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats) {
     for (const auto& availableFormat : availableFormats) {
         if (availableFormat.format == VK_FORMAT_B8G8R8A8_SRGB &&
             availableFormat.colorSpace == VK_COLOR_SPACE_SRGB_NONLINEAR_KHR) {
@@ -1418,7 +1431,7 @@ VkSurfaceFormatKHR CSJApplication::chooseSwapSurfaceFormat(const std::vector<VkS
     return availableFormats[0];
 }
 
-VkPresentModeKHR CSJApplication::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
+VkPresentModeKHR CSJVulkanRenderer::chooseSwapPresentMode(const std::vector<VkPresentModeKHR>& availablePresentModes) {
     for (const auto& availablePresentMode : availablePresentModes) {
         if (availablePresentMode == VK_PRESENT_MODE_MAILBOX_KHR) {
             return availablePresentMode;
@@ -1428,7 +1441,7 @@ VkPresentModeKHR CSJApplication::chooseSwapPresentMode(const std::vector<VkPrese
     return VK_PRESENT_MODE_FIFO_KHR;
 }
 
-VkExtent2D CSJApplication::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
+VkExtent2D CSJVulkanRenderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capabilities) {
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
         return capabilities.currentExtent;
     } else {
@@ -1447,7 +1460,7 @@ VkExtent2D CSJApplication::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& capa
     }
 }
 
-SwapChainSupportDetails CSJApplication::querySwapChainSupport(VkPhysicalDevice device) {
+SwapChainSupportDetails CSJVulkanRenderer::querySwapChainSupport(VkPhysicalDevice device) {
     SwapChainSupportDetails details;
 
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(device, m_surface, &details.capabilities);
@@ -1471,7 +1484,7 @@ SwapChainSupportDetails CSJApplication::querySwapChainSupport(VkPhysicalDevice d
     return details;
 }
 
-bool CSJApplication::checkDeviceExtensionSupport(VkPhysicalDevice device) {
+bool CSJVulkanRenderer::checkDeviceExtensionSupport(VkPhysicalDevice device) {
     uint32_t extensionCount;
     vkEnumerateDeviceExtensionProperties(device, nullptr, &extensionCount, nullptr);
 
@@ -1487,7 +1500,7 @@ bool CSJApplication::checkDeviceExtensionSupport(VkPhysicalDevice device) {
     return requiredExtensions.empty();
 }
 
-uint32_t CSJApplication::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
+uint32_t CSJVulkanRenderer::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties) {
     VkPhysicalDeviceMemoryProperties memProperties;
     vkGetPhysicalDeviceMemoryProperties(m_physical_device, &memProperties);
 
@@ -1500,3 +1513,6 @@ uint32_t CSJApplication::findMemoryType(uint32_t typeFilter, VkMemoryPropertyFla
 
     throw std::runtime_error("failed to find suitable memory type!");
 }
+
+
+} // namespace csjrhi

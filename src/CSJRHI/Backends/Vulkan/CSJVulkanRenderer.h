@@ -1,15 +1,14 @@
-#ifndef __CSJAPPLICATION_H__
-#define __CSJAPPLICATION_H__
+#pragma once
 
-#define GLFW_INCLUDE_VULKAN
-#include <GLFW/glfw3.h>
+#include "ICSJRenderer.h"
 
 #include <vector>
 #include <optional>
 
-#include <iostream>
-#include <stdexcept>
-#include <cstdlib>
+#include <vulkan/vulkan.h>
+#include <GLFW/glfw3.h>
+
+namespace csjrhi {
 
 struct QueueFamilyIndices {
     std::optional<uint32_t> m_graphics_family;
@@ -26,27 +25,27 @@ struct SwapChainSupportDetails {
     std::vector<VkPresentModeKHR> presentModes;
 };
 
-class CSJApplication {
+class CSJVulkanRenderer : public ICSJRenderer {
 public:
-    CSJApplication() = default;
-    ~CSJApplication() = default;
-    void run();
+    CSJVulkanRenderer() = default;
+    ~CSJVulkanRenderer();
 
-    void setFramebufferResize(bool framebufferResize) {
-        m_bFrameBufferResize = framebufferResize;
-    }
-
-    void resizeFramebuffer(int width, int height);
-
-    static void framebufferResiceCallback(GLFWwindow *window, int width, int height);
-
+    bool Init(void* windowHandle, int width, int height) override;
+    void Shutdown() override;
+    void Resize(int width, int height) override;
+    void Render() override;
+    void WaitIdle() override;
+    uint32_t CreateTexture(int width, int height, int format, const void* data) override;
+    void DestroyTexture(uint32_t textureId) override;
+    void UpdateTexture(uint32_t textureId, const void* data) override;
+    std::string GetBackendName() const override;
+    float GetLastFrameTime() const override;
+    const CSJRendererCapabilities& GetCapabilities() const override;
 
 protected:
-    void initWindow();
-
     void initVulkan();
 
-    void mainLoop();
+    void resizeFramebuffer(int width, int height);
 
     void cleanup();
     void cleanupSwapChain();
@@ -126,6 +125,7 @@ protected:
     bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
 private:
     GLFWwindow *m_pWindow;
     VkInstance  m_VkInstance{nullptr};
@@ -184,7 +184,8 @@ private:
     const std::vector<const char *> m_validation_layers{"VK_LAYER_KHRONOS_validation"};
     const std::vector<const char *> m_device_extensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
+    CSJRendererCapabilities m_renderCaps;
+
 };
 
-
-#endif // __CSJAPPLICATION_H__
+} // namespace csjrhi
