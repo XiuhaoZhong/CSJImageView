@@ -1,7 +1,8 @@
 #include "CSJApplication.h"
 
 #ifdef _WIN32
-int WinMain() {
+//int WinMain() {
+int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpCmdLine, int nCmdShow) {
 #elif __APPLE__
 int main(int argc, char* avgv[]) {
 #endif 

@@ -15,21 +15,17 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
 set(PROJECT_SOURCES
-        main/main.cc
-        main/CSJApplication.h
-        main/CSJApplication.cc
-        Utils/CSJPathTool.h
-        Utils/CSJPathTool.cc
+    src/main/main.cc
+    src/main/CSJApplication.h
+    src/main/CSJApplication.cc
+    src/main/CSJRendererLoader.h
+    src/main/CSJRendererLoader.cc
+    src/Utils/CSJPathTool.h
+    src/Utils/CSJPathTool.cc
 )
 
-if(WIN32)
-set(Vulkan_DIR $ENV{VULKAN_SDK})
-set(Vulkan_Lib_DIR ${VulkanDIR}/Lib/cmake)
-set(vulkan_lib ${Vulkan_DIR}/Lib/vulkan-1.lib)
-elseif(APPLE)
-set(Vulkan_DIR "/Users/xiuhaozhong/DevEnvironments/VulkanSDK/1.4.304.0/macOS")
-set(vulkan_lib ${Vulkan_DIR}/Lib/libvulkan.1.dylib)
-endif()
+message(STATUS "src files = ${PROJECT_SOURCES}")
+
 include_directories(Utils 3rdParts/glfw3/include/ 3rdParts/stbi/ ${Vulkan_DIR}/Include)
 set(glfw_include ${THIRD_PARTY_DIR}/glfw/include)
 
@@ -43,10 +39,19 @@ add_executable(${TARGET_NAME}
             ${PROJECT_SOURCES}
 )
 
+target_include_directories(${TARGET_NAME} PRIVATE
+    ${CSJIMAGEVIEW_ROOT_DIR}/src/CSJRHI/Public
+)
+
 target_link_libraries(${TARGET_NAME} PRIVATE ${vulkan_lib} ${Native_LIBS})
 target_link_libraries(${TARGET_NAME} PUBLIC glfw)
 
-target_include_directories(${TARGET_NAME} PUBLIC $<BUILD_INTERFACE:${glfw_include}>)
+target_include_directories(${TARGET_NAME} 
+                           PUBLIC $<BUILD_INTERFACE:${glfw_include}>
+                           ${CSJIMAGEVIEW_ROOT_DIR}/src)
+
+# get_target_property(TARGET_INCLUDES MyTarget INCLUDE_DIRECTORIES)
+# message(STATUS "MyTarget include directories: ${TARGET_INCLUDES}")
 
 set_target_properties(${TARGET_NAME} PROPERTIES
     ${BUNDLE_ID_OPTION}
@@ -56,11 +61,22 @@ set_target_properties(${TARGET_NAME} PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CSJIMAGEVIEW_ROOT_DIR}/build/bin/$<CONFIG>)
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CSJIMAGEVIEW_ROOT_DIR}/build/bin/$<CONFIG>)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CSJIMAGEVIEW_ROOT_DIR}/build/lib/$<CONFIG>)
+
 add_subdirectory(${THIRD_PARTY_DIR})
+add_subdirectory(src/CSJRHI)
 
 include(GNUInstallDirs)
 install(TARGETS CSJImageView
     BUNDLE DESTINATION .
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+)
+
+set_target_properties(${TARGET_NAME} PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}
+    LIBRARY_OUTPUT_DIRECTORY ${CMAKE_LIBRARY_OUTPUT_DIRECTORY}
+    ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_ARCHIVE_OUTPUT_DIRECTORY}
 )
