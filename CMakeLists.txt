@@ -26,7 +26,7 @@ set(PROJECT_SOURCES
 
 message(STATUS "src files = ${PROJECT_SOURCES}")
 
-include_directories(Utils 3rdParts/glfw3/include/ 3rdParts/stbi/ ${Vulkan_DIR}/Include)
+include_directories(Utils 3rdParts/glfw3/include/ ${Vulkan_DIR}/Include)
 set(glfw_include ${THIRD_PARTY_DIR}/glfw/include)
 
 if(CMAKE_HOST_WIN32)
@@ -43,7 +43,7 @@ target_include_directories(${TARGET_NAME} PRIVATE
     ${CSJIMAGEVIEW_ROOT_DIR}/src/CSJRHI/Public
 )
 
-target_link_libraries(${TARGET_NAME} PRIVATE ${vulkan_lib} ${Native_LIBS})
+target_link_libraries(${TARGET_NAME} PRIVATE ${Native_LIBS})
 target_link_libraries(${TARGET_NAME} PUBLIC glfw)
 
 target_include_directories(${TARGET_NAME} 

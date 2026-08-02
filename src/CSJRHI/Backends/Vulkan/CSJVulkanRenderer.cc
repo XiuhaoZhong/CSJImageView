@@ -8,10 +8,12 @@
 #include <chrono>
 #include <array>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-
-// #include "Utils/CSJPathTool.h"
 
 //#define STB_IMAGE_IMPLEMENETATION
 #include "stb_image.h"
@@ -98,7 +100,9 @@ bool CSJVulkanRenderer::Init(void *windowHandle, int width, int height) {
         return false;
     }
 
-    m_pWindow = (GLFWwindow *)windowHandle;
+    m_pWindow = windowHandle;
+
+    initVulkan();
 
     std::cout << "CSJVulkan Renderer initialize success." << std::endl;
     return true;
@@ -106,20 +110,34 @@ bool CSJVulkanRenderer::Init(void *windowHandle, int width, int height) {
 
 void CSJVulkanRenderer::Shutdown() {
     std::cout << "CSJVulkan Renderer shutdown." << std::endl;
+
+    cleanup();
 }
 
 void CSJVulkanRenderer::Resize(int width, int height) {
-
+    recreateSwapChain();
 }
 
 void CSJVulkanRenderer::Render() {
-    std::cout << "CSJVulkan Renderer renders a frame." << std::endl;
+    auto windowSize = getCurrentWindowSize();
+    if (m_windowWidth != windowSize[0] || m_windowHeight != windowSize[1]) {
+        m_windowWidth = windowSize[0];
+        m_windowHeight = windowSize[1];
+        m_bNeedRecreateSwapChain = true;
+    }
+
+    if (m_bNeedRecreateSwapChain) {
+        std::cout << "Recreate swapchain" << std::endl;
+        recreateSwapChain();
+        m_bNeedRecreateSwapChain = false;
+        return ;
+    }
+
+    drawFrame();
 }
 
 void CSJVulkanRenderer::WaitIdle() {
-    static int counter = 0;
-    std::cout << "CSJVulkan Renderer waits for idle, frame: " << counter++ << std::endl;
-    std::this_thread::sleep_for(std::chrono::milliseconds(25));
+
 }
 
 uint32_t CSJVulkanRenderer::CreateTexture(int width, int height, int format, const void *data) {
@@ -146,21 +164,6 @@ const CSJRendererCapabilities &CSJVulkanRenderer::GetCapabilities() const {
     return m_renderCaps;
 }
 
-void CSJVulkanRenderer::resizeFramebuffer(int width, int height) {
-    while (width == 0 || height == 0) {
-        glfwGetFramebufferSize(m_pWindow, &width, &height);
-        glfwWaitEvents();
-    }
-
-    vkDeviceWaitIdle(m_device);
-
-    cleanupSwapChain();
-
-    createSwapChain();
-    createImageViews();
-    createFrameBuffers();
-}
-
 void CSJVulkanRenderer::initVulkan() {
     createInstance();
     createSurface();
@@ -185,7 +188,28 @@ void CSJVulkanRenderer::initVulkan() {
     createSyncObjects();
 }
 
+std::array<int, 2> CSJVulkanRenderer::getCurrentWindowSize() {
+    if (!m_pWindow) {
+        return {0, 0};
+    }
+
+#ifdef _WIN32
+    RECT rect;
+    GetClientRect((HWND)m_pWindow, &rect);
+    return {rect.right - rect.left, rect.bottom - rect.top};
+#endif
+
+    return {0, 0};
+}
+
 void CSJVulkanRenderer::cleanup() {
+
+    if (m_device == VK_NULL_HANDLE) {
+        return ;
+    }
+
+    vkDeviceWaitIdle(m_device);
+
     if (m_enable_validation_Layers) {
         
     }
@@ -231,10 +255,6 @@ void CSJVulkanRenderer::cleanup() {
 
     vkDestroySurfaceKHR(m_VkInstance, m_surface, nullptr);
     vkDestroyInstance(m_VkInstance, nullptr);
-
-    glfwDestroyWindow(m_pWindow);
-
-    glfwTerminate();
 }
 
 void CSJVulkanRenderer::cleanupSwapChain() {
@@ -256,17 +276,19 @@ void CSJVulkanRenderer::createInstance() {
 
     std::cout << " enter create instance function " << std::endl;
 
+    // The followed info is mainly for debug tools such as RenderDoc and so on.
+    // Remvoing the appInfo doesn't influence the rendering functionality.
     VkApplicationInfo appInfo{};
     appInfo.sType = VK_STRUCTURE_TYPE_APPLICATION_INFO;
-    appInfo.pApplicationName = "Hello Triangle";
+    appInfo.pApplicationName = "CSJVulkanRenderer";
     appInfo.applicationVersion = VK_MAKE_VERSION(1, 0, 0);
-    appInfo.pEngineName = "No Engine";
+    appInfo.pEngineName = "CSJVulkanRenderer";
     appInfo.engineVersion = VK_MAKE_VERSION(1, 0, 0);
     appInfo.apiVersion = VK_API_VERSION_1_0;
 
     VkInstanceCreateInfo createInfo{};
-    createInfo.sType = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
-    createInfo.pApplicationInfo = &appInfo;
+    createInfo.sType                   = VK_STRUCTURE_TYPE_INSTANCE_CREATE_INFO;
+    createInfo.pApplicationInfo        = &appInfo;
     
     auto extensions = getRequiredExtensions();
     createInfo.enabledExtensionCount = static_cast<uint32_t>(extensions.size());
@@ -288,7 +310,6 @@ void CSJVulkanRenderer::createInstance() {
     }
 
     VkResult result = vkCreateInstance(&createInfo, nullptr, &m_VkInstance);
-
     if (result != VK_SUCCESS) {
         throw std::runtime_error("failed to create instance!");
     }
@@ -320,15 +341,21 @@ bool CSJVulkanRenderer::checkValidationLayerSupport() {
 }
 
 std::vector<const char *> CSJVulkanRenderer::getRequiredExtensions() {
-    uint32_t     glfwExtensionCount = 0;
-    const char **glfwExtensions;
-    glfwExtensions = glfwGetRequiredInstanceExtensions(&glfwExtensionCount);
+    std::vector<const char *> extensions;
 
-    std::vector<const char *> extensions(glfwExtensions, glfwExtensions + glfwExtensionCount);
+    extensions.push_back(VK_KHR_SURFACE_EXTENSION_NAME);
 
     if (m_enable_validation_Layers || m_enable_debug_utils_label) {
         extensions.push_back(VK_EXT_DEBUG_UTILS_EXTENSION_NAME);
     }
+
+#ifdef _WIN32
+    extensions.push_back(VK_KHR_WIN32_SURFACE_EXTENSION_NAME);
+#elif defined(__APPLE__)
+    extensions.push_back(VK_MVK_MACOS_SURFACE_EXTENSION_NAME);
+#elif defined(__linux__)
+    extensions.push_back(VK_KHR_XCB_SURFACE_EXTENSION_NAME);  // 或 XLIB
+#endif
 
 #if defined(__MACH__)
     extensions.push_back(VK_KHR_GET_PHYSICAL_DEVICE_PROPERTIES_2_EXTENSION_NAME);
@@ -462,9 +489,26 @@ void CSJVulkanRenderer::createLogicalDevice() {
 }
 
 void CSJVulkanRenderer::createSurface() {
-    if (glfwCreateWindowSurface(m_VkInstance, m_pWindow, nullptr, &m_surface) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create window surface!");
+    VkWin32SurfaceCreateInfoKHR surfaceInfo{};
+#ifdef _WIN32
+    HWND hwnd = (HWND)m_pWindow;
+    if (!hwnd) {
+        return ;
     }
+
+    HINSTANCE hInstance = GetModuleHandle(nullptr);
+    surfaceInfo.sType = VK_STRUCTURE_TYPE_WIN32_SURFACE_CREATE_INFO_KHR;
+    surfaceInfo.hinstance = hInstance;
+    surfaceInfo.hwnd = hwnd;
+#endif
+
+    VkResult result = vkCreateWin32SurfaceKHR(m_VkInstance, &surfaceInfo, nullptr, &m_surface);
+    if (result != VK_SUCCESS) {
+        std::cerr << "[VulkanRenderer] Failed to create Win32 surface! Error: " << result << std::endl;
+        return ;
+    }
+
+    std::cout << "[VulkanRenderer] Surface created successfully." << std::endl;
 }
 
 void CSJVulkanRenderer::createSwapChain() {
@@ -474,7 +518,7 @@ void CSJVulkanRenderer::createSwapChain() {
     VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
     VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
 
-    uint32_t imageCount = swapChainSupport.capabilities.minImageCount + 1;
+    uint32_t imageCount = swapChainSupport.capabilities.minImageCount;
     if (swapChainSupport.capabilities.maxImageCount > 0 && 
         imageCount > swapChainSupport.capabilities.maxImageCount) {
         imageCount = swapChainSupport.capabilities.maxImageCount;
@@ -522,14 +566,12 @@ void CSJVulkanRenderer::createSwapChain() {
 }
 
 void CSJVulkanRenderer::recreateSwapChain() {
-    int width, height;
-    glfwGetFramebufferSize(m_pWindow, &width, &height);
-    while (width != 0 || height != 0) {
-        glfwGetFramebufferSize(m_pWindow, &width, &height);
-        glfwWaitEvents();
-    }
-
     vkDeviceWaitIdle(m_device);
+
+    if (m_windowWidth == 0 || m_windowHeight == 0) {
+        m_bNeedRecreateSwapChain = true;
+        return ;
+    }
 
     cleanupSwapChain();
 
@@ -1057,7 +1099,9 @@ void CSJVulkanRenderer::createIndexBuffer() {
 
 void CSJVulkanRenderer::createTextureImage() {
     int texWidth, texHeight, texChannels;
-    stbi_uc* pixels = stbi_load("resources/originImages/slamDumk_images/cross_street.jpeg", &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
+    std::string imagePath("E:\\technology\\Personal_Projects\\CSJImageView\\resources\\originImages\\slamDumk_images\\cross_street.jpeg");
+    // "resources/originImages/slamDumk_images/cross_street.jpeg"
+    stbi_uc* pixels = stbi_load(imagePath.c_str(), &texWidth, &texHeight, &texChannels, STBI_rgb_alpha);
 
     VkDeviceSize imageSize = texWidth * texHeight * 4;
     if (!pixels) {
@@ -1226,7 +1270,8 @@ void CSJVulkanRenderer::createTextureImageSampler() {
     samplerInfo.addressModeU            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     samplerInfo.addressModeV            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
     samplerInfo.addressModeW            = VK_SAMPLER_ADDRESS_MODE_REPEAT;
-    samplerInfo.anisotropyEnable        = VK_TRUE;
+    // Currently don't need to open the anisotropyEnable.
+    //samplerInfo.anisotropyEnable        = VK_TRUE;
     samplerInfo.maxAnisotropy           = properties.limits.maxSamplerAnisotropy;
     samplerInfo.borderColor             = VK_BORDER_COLOR_INT_OPAQUE_BLACK;
     samplerInfo.unnormalizedCoordinates = VK_FALSE;
@@ -1293,11 +1338,10 @@ VkImageView CSJVulkanRenderer::createImageView(VkImage image, VkFormat format) {
 }
 
 void CSJVulkanRenderer::createBuffer(VkDeviceSize size,
-                                  VkBufferUsageFlags usage,
-                                  VkMemoryPropertyFlags properties,
-                                  VkBuffer &buffer,
-                                  VkDeviceMemory &bufferMemory)
-{
+                                     VkBufferUsageFlags usage,
+                                     VkMemoryPropertyFlags properties,
+                                     VkBuffer &buffer,
+                                     VkDeviceMemory &bufferMemory) {
     VkBufferCreateInfo createInfo{};
     createInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
     createInfo.size = size;
@@ -1377,7 +1421,16 @@ void CSJVulkanRenderer::drawFrame() {
     vkResetFences(m_device, 1, &m_in_flight_fences[m_current_frame]);
 
     uint32_t imageIndex;
-    vkAcquireNextImageKHR(m_device, m_swapchain, UINT64_MAX, m_image_available_semas[m_current_frame], VK_NULL_HANDLE, &imageIndex);
+    VkResult result = vkAcquireNextImageKHR(m_device,
+                                            m_swapchain, 
+                                            UINT64_MAX, 
+                                            m_image_available_semas[m_current_frame], 
+                                            VK_NULL_HANDLE, 
+                                            &imageIndex);
+    if (result != VK_SUCCESS) {
+        std::cout << "Require next image failed!" << std::endl;
+        return ;
+    }
 
     updateUniformBuffer(m_current_frame);
 
@@ -1445,12 +1498,11 @@ VkExtent2D CSJVulkanRenderer::chooseSwapExtent(const VkSurfaceCapabilitiesKHR& c
     if (capabilities.currentExtent.width != std::numeric_limits<uint32_t>::max()) {
         return capabilities.currentExtent;
     } else {
-        int width, height;
-        glfwGetFramebufferSize(m_pWindow, &width, &height);
+        auto windowSize = getCurrentWindowSize();
 
         VkExtent2D actualExtent = {
-            static_cast<uint32_t>(width),
-            static_cast<uint32_t>(height)
+            static_cast<uint32_t>(windowSize[0]),
+            static_cast<uint32_t>(windowSize[1])
         };
 
         actualExtent.width = std::clamp(actualExtent.width, capabilities.minImageExtent.width, capabilities.maxImageExtent.width);

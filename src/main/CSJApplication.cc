@@ -1,5 +1,11 @@
 #include "CSJApplication.h"
 
+
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
+#include <iostream>
 #include <fstream>
 #include <set>
 #include <vector>
@@ -9,7 +15,7 @@
 #include <algorithm>
 #include <chrono>
 
-// #include "ICSJRenderer.h"
+#include <GLFW/glfw3native.h>
 
 #include "Utils/CSJPathTool.h"
 
@@ -57,7 +63,11 @@ bool CSJApplication::initRenderer() {
         return false;
     }
 
-    bool res = m_pRenderer->Init(m_pWindow, WIDTH, HEIGHT);
+    void *windowHandle = nullptr;
+#ifdef _WIN32
+    windowHandle = (void *)glfwGetWin32Window(m_pWindow);
+#endif
+    bool res = m_pRenderer->Init(windowHandle, WIDTH, HEIGHT);
     if (!res) {
         std::cerr << "[HostApp] Failed to initialize renderer!" << std::endl;
     } else {
@@ -70,6 +80,9 @@ bool CSJApplication::initRenderer() {
 void CSJApplication::initWindow() {
     std::cout << " enter init window function " << std::endl;
     glfwInit();
+
+    uint32_t count;
+    const char** extensions = glfwGetRequiredInstanceExtensions(&count);
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
     //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
@@ -88,23 +101,28 @@ void CSJApplication::initWindow() {
 }
 
 void CSJApplication::mainLoop() {
+
+    double lastFrameTime = glfwGetTime();
     while (!glfwWindowShouldClose(m_pWindow)) {
         glfwPollEvents();
 
         if (m_pRenderer) {
             m_pRenderer->Render();
-
-            m_pRenderer->WaitIdle();
         }
 
-        // TODO: call the draw function of renderer.
+        double currentFrameTime = glfwGetTime();
+        double deltaTime = currentFrameTime - lastFrameTime; // in second.
+        double deltaTimeMs = deltaTime * 1000.0;             //  transfer to millisecond.
+
+        // 2. output the frame delta time.
+        std::cout << "Frame time: " << deltaTimeMs << " ms" << std::endl;
+
+        lastFrameTime = currentFrameTime;
     }
 
     if (m_pRenderer) {
         m_pRenderer->Shutdown();
     }
-
-    // TODO: call the waitIdle function of renderer.
 }
 
 void CSJApplication::cleanup() {
