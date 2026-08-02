@@ -5,8 +5,10 @@
 #include <vector>
 #include <optional>
 
+#ifdef _WIN32
+#define VK_USE_PLATFORM_WIN32_KHR 
+#endif
 #include <vulkan/vulkan.h>
-#include <GLFW/glfw3.h>
 
 namespace csjrhi {
 
@@ -45,7 +47,7 @@ public:
 protected:
     void initVulkan();
 
-    void resizeFramebuffer(int width, int height);
+    std::array<int, 2> getCurrentWindowSize();
 
     void cleanup();
     void cleanupSwapChain();
@@ -127,7 +129,10 @@ protected:
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
 private:
-    GLFWwindow *m_pWindow;
+    void *m_pWindow;
+    int   m_windowWidth = 0;
+    int   m_windowHeight = 0;
+    bool  m_bNeedRecreateSwapChain = false;
     VkInstance  m_VkInstance{nullptr};
     
     VkDevice         m_device;

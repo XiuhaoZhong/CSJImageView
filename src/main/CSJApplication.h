@@ -1,6 +1,12 @@
 #ifndef __CSJAPPLICATION_H__
 #define __CSJAPPLICATION_H__
 
+#ifdef _WIN32
+    #define VK_USE_PLATFORM_WIN32_KHR
+    #define _GLFW_WIN32
+    #define GLFW_EXPOSE_NATIVE_WIN32 1 // Request original functions explicitily.
+#endif
+
 #include <GLFW/glfw3.h>
 
 #include <vector>

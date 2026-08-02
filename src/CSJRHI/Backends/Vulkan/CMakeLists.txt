@@ -37,16 +37,14 @@ message(STATUS "ICSJRenderer path = ${CSJRHI_ROOT_DIR}/Public")
 
 target_include_directories(${TARGET_NAME} PRIVATE
     ${CSJIMAGEVIEW_ROOT_DIR}/Utils 
-    ${THIRD_PARTY_DIR}/glfw3/include/ 
     ${THIRD_PARTY_DIR}/stbi/ 
     ${Vulkan_DIR}/Include
     ${CSJRHI_ROOT_DIR}/Public
     ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
-target_link_libraries(${TARGET_NAME} PRIVATE 
+target_link_libraries(${TARGET_NAME} PUBLIC
                       Vulkan::Vulkan
-                      glfw
                       ${CMAKE_DL_LIBS})
 
 set_target_properties(${TARGET_NAME} PROPERTIES
