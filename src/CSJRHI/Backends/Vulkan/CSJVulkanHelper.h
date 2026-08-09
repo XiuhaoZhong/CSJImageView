@@ -127,16 +127,6 @@ private:
         CSJBufferUsage GetUsage() const override { return usage; }
     };
 
-    // struct ShaderData : public ICSJShader {
-    //     VkShaderModule module = VK_NULL_HANDLE;
-    //     CSJShaderStage stage = CSJShaderStage::CSJShaderStage_Unknown;
-    //     std::string name;
-
-    //     void* GetNativeHandle() override { return reinterpret_cast<void*>(module); }
-    //     const std::string& GetName() const override { return name; }
-    //     CSJShaderStage GetStage() const override { return stage; }
-    // };
-
 private:
     VkDevice         m_device;
     VkPhysicalDevice m_physicalDevice;
