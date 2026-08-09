@@ -25,6 +25,7 @@ endif()
 
 set(VULKAN_SRC 
     CSJVulkanRenderer.cc
+    CSJVulkanHelper.cc
     ${CSJRHI_ROOT_DIR}/Public/CSJRendererFactory.cc
     )
 
