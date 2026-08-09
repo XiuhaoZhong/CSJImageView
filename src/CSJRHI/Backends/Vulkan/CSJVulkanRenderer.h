@@ -4,13 +4,18 @@
 
 #include <vector>
 #include <optional>
+#include <memory>
 
 #ifdef _WIN32
 #define VK_USE_PLATFORM_WIN32_KHR 
 #endif
 #include <vulkan/vulkan.h>
 
+#include "CSJVulkanHelper.h"
+
 namespace csjrhi {
+
+using CSJSpVulkanHelper = std::unique_ptr<CSJVulkanHelper>;
 
 struct QueueFamilyIndices {
     std::optional<uint32_t> m_graphics_family;
@@ -68,6 +73,8 @@ protected:
 
     void createLogicalDevice();
 
+    void createVulkanHelper();
+
     void createSurface();
 
     void createSwapChain();
@@ -96,19 +103,6 @@ protected:
     void createIndexBuffer();
 
     void createTextureImage();
-    void createImage(uint32_t width, uint32_t height, VkFormat format, VkImageTiling tiling,
-                     VkImageUsageFlags usage, VkMemoryPropertyFlags properties,
-                     VkImage& image, VkDeviceMemory& imageMemory);
-    void transitionImageLayout(VkImage image, VkFormat format, VkImageLayout oldLayout, VkImageLayout newLayout);
-    void copyBufferToImage(VkBuffer buffer, VkImage image, uint32_t width, uint32_t height);
-
-    void createTextureImageView();
-    void createTextureImageSampler();
-
-    VkCommandBuffer beginSingleTimeCommands();
-    void endSingleTimeCommands(VkCommandBuffer commandBuffer);
-
-    VkImageView createImageView(VkImage image, VkFormat format);
     void createBuffer(VkDeviceSize size, 
                       VkBufferUsageFlags usage, 
                       VkMemoryPropertyFlags properties,
@@ -133,7 +127,10 @@ private:
     int   m_windowWidth = 0;
     int   m_windowHeight = 0;
     bool  m_bNeedRecreateSwapChain = false;
+    
+    CSJSpVulkanHelper m_pHelper = nullptr; 
     VkInstance  m_VkInstance{nullptr};
+    CSJSpTexture m_pTexData = nullptr;
     
     VkDevice         m_device;
     VkQueue          m_graphics_queue;
@@ -153,7 +150,6 @@ private:
     VkPipelineLayout      m_pipeline_layout;
     VkPipeline            m_graphics_pipeline;
     VkCommandPool         m_command_pool;
-    //VkCommandBuffer  m_command_buffer;
     std::vector<VkCommandBuffer> m_command_buffers;
 
     VkDescriptorPool m_descriptor_pool;
@@ -165,18 +161,9 @@ private:
     VkBuffer         m_index_buffer;
     VkDeviceMemory   m_index_buffer_memory;
 
-    VkImage          m_texture_image;
-    VkDeviceMemory   m_texture_image_momery;
-    VkImageView      m_texture_imageview;
-    VkSampler        m_texture_image_sampler;
-
     std::vector<VkBuffer>       m_uniform_buffers;
     std::vector<VkDeviceMemory> m_uniform_buffer_memories;
     std::vector<void *>         m_uniform_buffer_mappeds;
-
-    //VkSemaphore      m_image_available_sema;
-    //VkSemaphore      m_render_finish_sema;
-    //VkFence          m_in_flight_fence;
 
     std::vector<VkSemaphore> m_image_available_semas;
     std::vector<VkSemaphore> m_render_finish_semas;
