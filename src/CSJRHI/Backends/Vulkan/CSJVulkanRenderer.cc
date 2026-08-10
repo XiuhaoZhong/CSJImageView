@@ -235,7 +235,7 @@ void CSJVulkanRenderer::cleanup() {
      * be released before the vkDevice is released.
      */
     if (m_pTexData) {
-        m_pTexData = nullptr;
+        m_pTexData.reset();
     }
 
     vkDestroyDescriptorSetLayout(m_device, m_descriptorset_layout, nullptr);
