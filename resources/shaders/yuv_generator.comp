@@ -1,0 +1,77 @@
+#version 450
+
+// ============================================================
+// Work Group Size
+// ============================================================
+// 16x16 threads per work group.
+// This is a common choice for image processing.
+layout(local_size_x = 16, local_size_y = 16, local_size_z = 1) in;
+
+// ============================================================
+// Storage Images (Output)
+// ============================================================
+// These are the YUV planes.
+// "r8" means 8-bit red channel (we store luminance or chroma in the red channel).
+layout(binding = 0, r8)  uniform image2D yImage;
+layout(binding = 1, r8)  uniform image2D uImage;
+layout(binding = 2, r8)  uniform image2D vImage;
+
+// ============================================================
+// Uniform Buffer (Input)
+// ============================================================
+// We pass parameters like time, image size, etc.
+layout(binding = 3) uniform Uniforms {
+    float time;         // For animation
+    float aspectRatio;  // For aspect-correct patterns
+} ubo;
+
+// ============================================================
+// Main Function
+// ============================================================
+void main() {
+    // ---- 1. Get thread position ----
+    // gl_GlobalInvocationID.xy gives us the pixel position in the image.
+    ivec2 pos = ivec2(gl_GlobalInvocationID.xy);
+
+    // ---- 2. Get image sizes ----
+    ivec2 ySize = imageSize(yImage);
+    ivec2 uvSize = imageSize(uImage);
+
+    // ---- 3. Clamp to image bounds ----
+    // Some threads may be outside the image (if image size isn't a multiple of 16).
+    if (pos.x >= ySize.x || pos.y >= ySize.y) {
+        return;  // This thread does nothing.
+    }
+
+    // ---- 4. Normalized coordinates (0..1) ----
+    vec2 uv = vec2(pos) / vec2(ySize);
+
+    // ---- 5. Generate YUV values ----
+    // These are arbitrary patterns for demonstration.
+    // You can replace this with any algorithm you like.
+
+    // Y: Luminance (brightness)
+    // Horizontal moving stripes.
+    float y = 0.5 + 0.5 * sin(uv.x * 10.0 + ubo.time);
+
+    // U: Color difference (blue-ish vs. yellow-ish)
+    // Vertical moving stripes.
+    float u = 0.5 + 0.5 * cos(uv.y * 8.0 + ubo.time * 0.5);
+
+    // V: Color difference (red-ish vs. green-ish)
+    // Circular moving pattern.
+    vec2 center = vec2(0.5, 0.5);
+    float dist = length(uv - center);
+    float v = 0.5 + 0.5 * sin(dist * 20.0 - ubo.time * 0.8);
+
+    // ---- 6. Write to storage images ----
+    // Y: full resolution.
+    imageStore(yImage, pos, vec4(y, 0.0, 0.0, 1.0));
+
+    // U and V: half resolution (common in YUV420).
+    ivec2 uvPos = pos / 2;
+    if (uvPos.x < uvSize.x && uvPos.y < uvSize.y) {
+        imageStore(uImage, uvPos, vec4(u, 0.0, 0.0, 1.0));
+        imageStore(vImage, uvPos, vec4(v, 0.0, 0.0, 1.0));
+    }
+}

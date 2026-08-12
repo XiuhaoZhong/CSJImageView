@@ -17,6 +17,12 @@ namespace csjrhi {
 
 using CSJSpVulkanHelper = std::unique_ptr<CSJVulkanHelper>;
 
+struct YUVUniforms {
+    float time;         // For animation
+    float aspectRatio;  // For aspect-correct patterns
+    float padding[2];   // Align to 16 bytes (optional, but good practice)
+};
+
 struct QueueFamilyIndices {
     std::optional<uint32_t> m_graphics_family;
     std::optional<uint32_t> m_present_family;
@@ -121,6 +127,66 @@ protected:
     bool checkDeviceExtensionSupport(VkPhysicalDevice device);
 
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
+
+    /**
+     * The next functions are for yuv frame generating and rendering.
+     */
+
+    VkDescriptorPool m_yuvDescriptorPool                  = VK_NULL_HANDLE;
+    VkDescriptorSetLayout m_yuvComputeDescriptorSetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout      m_yuvComputePipelineLayout      = VK_NULL_HANDLE;
+    VkPipeline            m_yuvComputePipeline            = VK_NULL_HANDLE;
+    VkDescriptorSet       m_yuvComputeDescriptorSet       = VK_NULL_HANDLE;
+
+    VkImage     m_yuvYImage     = VK_NULL_HANDLE;
+    VkImageView m_yuvYImageView = VK_NULL_HANDLE;
+    VkDeviceMemory m_yuvYMemory = VK_NULL_HANDLE;
+    VkImage     m_yuvUImage     = VK_NULL_HANDLE;
+    VkImageView m_yuvUImageView = VK_NULL_HANDLE;
+    VkDeviceMemory m_yuvUMemory = VK_NULL_HANDLE;
+    VkImage     m_yuvVImage     = VK_NULL_HANDLE;
+    VkImageView m_yuvVImageView = VK_NULL_HANDLE;
+    VkDeviceMemory m_yuvVMemory = VK_NULL_HANDLE;
+
+    VkBuffer m_yuvUniformBuffer = VK_NULL_HANDLE;
+    VkDeviceMemory m_yuvUniformBufferMemory = VK_NULL_HANDLE;
+    void* m_yuvUniformBufferMapped = nullptr;
+
+    float m_time = 0.0f;
+
+    void createyuvDescriptorPool();
+    void createYUVComputeDescriptorSetLayout();
+    void createYUVComputePipelineLayout();
+    void createYUVComputePipeline();
+    void createYUVStorageImages(uint32_t width, uint32_t height);
+    VkImage createYUVStorageImage(uint32_t width, uint32_t height, VkFormat format);
+    void createYUVComputeDescriptorSet();
+    // void createYUVComputeDescriptorPool();
+    void TransitionYUVToSampling(VkCommandBuffer commandBuffer);
+
+    void generateYUVFrame(VkCommandBuffer commandBuffer, float time);
+
+    void initYUVComputeComponents();
+    void unInitYUVComputeComponents();
+
+    /**
+     * The yuv rendering components.
+     */
+    VkDescriptorSetLayout m_yuvDescriptorSetLayout = VK_NULL_HANDLE;
+    VkPipelineLayout      m_yuvPipelineLayout      = VK_NULL_HANDLE;
+    VkPipeline            m_yuvPipeline            = VK_NULL_HANDLE;
+    VkDescriptorSet       m_yuvDescriptorSet       = VK_NULL_HANDLE;
+    VkDescriptorPool      m_yuvDescirptorPool      = VK_NULL_HANDLE;
+    VkSampler             m_yuvSampler             = VK_NULL_HANDLE;
+
+    void createYUVStorageImages();
+    void createYUVImageViews();
+    void createYUVDescriptorSetLayout();
+    void createYUVPipelineLayout();
+    void createYUVPipeline();
+    void createYUVDescriptorSet();
+    void createYUVSampler();
+    void createYUVUniformBuffer();
 
 private:
     void *m_pWindow;
