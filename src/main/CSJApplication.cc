@@ -110,14 +110,14 @@ void CSJApplication::mainLoop() {
             m_pRenderer->Render();
         }
 
-        double currentFrameTime = glfwGetTime();
-        double deltaTime = currentFrameTime - lastFrameTime; // in second.
-        double deltaTimeMs = deltaTime * 1000.0;             //  transfer to millisecond.
+        // double currentFrameTime = glfwGetTime();
+        // double deltaTime = currentFrameTime - lastFrameTime; // in second.
+        // double deltaTimeMs = deltaTime * 1000.0;             //  transfer to millisecond.
 
-        // 2. output the frame delta time.
-        std::cout << "Frame time: " << deltaTimeMs << " ms" << std::endl;
+        // // 2. output the frame delta time.
+        // std::cout << "Frame time: " << deltaTimeMs << " ms" << std::endl;
 
-        lastFrameTime = currentFrameTime;
+        // lastFrameTime = currentFrameTime;
     }
 
     if (m_pRenderer) {
