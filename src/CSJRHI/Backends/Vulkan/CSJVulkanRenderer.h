@@ -12,10 +12,11 @@
 #include <vulkan/vulkan.h>
 
 #include "CSJVulkanHelper.h"
+#include "ICSJRenderable.h"
 
 namespace csjrhi {
 
-using CSJSpVulkanHelper = std::unique_ptr<CSJVulkanHelper>;
+using CSJSpVulkanHelper = std::shared_ptr<CSJVulkanHelper>;
 
 struct YUVUniforms {
     float time;         // For animation
@@ -55,6 +56,39 @@ public:
     float GetLastFrameTime() const override;
     const CSJRendererCapabilities& GetCapabilities() const override;
 
+    std::vector<char> readFile(const std::string& filename);
+    VkShaderModule createShaderModule(const std::vector<char>& code);
+    void createBuffer(VkDeviceSize size,
+                      VkBufferUsageFlags usage,
+                      VkMemoryPropertyFlags properties,
+                      VkBuffer& buffer,
+                      VkDeviceMemory& bufferMemory);
+    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
+
+    VkDevice getDevice() const {
+        return m_device;
+    }
+
+    VkRenderPass getRenderPass() const {
+        return m_render_pass;
+    }
+
+    VkCommandBuffer getCommandBuffer() const {
+        return m_command_buffers[m_current_frame];
+    }
+
+    VkDescriptorPool getDescriptorPool() const {
+        return m_descripotrPoolForRenderables;
+    }
+
+    VkExtent2D getSwapchainExtent() const {
+        return m_swapchain_extent;
+    }
+
+    CSJSpVulkanHelper getHelper() const {
+        return m_pHelper;
+    }
+
 protected:
     void initVulkan();
 
@@ -88,8 +122,6 @@ protected:
 
     void createImageViews();
 
-    std::vector<char> readFile(const std::string& filename);
-    VkShaderModule createShaderModule(const std::vector<char>& code);
     void createGraphicsPipeline();
 
     void createRenderPass();
@@ -100,24 +132,8 @@ protected:
     void createCommandBuffer();
     void recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex);
     void createSyncObjects();
-    void createDescriptorSetLayout();
     void createDescriptorPool();
-    void createDescriptorSets();
 
-    void createUniformBuffers();
-    void createVertexBuffer();
-    void createIndexBuffer();
-
-    void createTextureImage();
-    void createBuffer(VkDeviceSize size, 
-                      VkBufferUsageFlags usage, 
-                      VkMemoryPropertyFlags properties,
-                      VkBuffer& buffer, 
-                      VkDeviceMemory& bufferMemory);
-
-    void copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDeviceSize size);
-
-    void updateUniformBuffer(uint32_t currentImage);
     void drawFrame();
 
     VkSurfaceFormatKHR chooseSwapSurfaceFormat(const std::vector<VkSurfaceFormatKHR>& availableFormats);
@@ -158,8 +174,6 @@ protected:
     void createYUVComputeDescriptorSetLayout();
     void createYUVComputePipelineLayout();
     void createYUVComputePipeline();
-    void createYUVStorageImages(uint32_t width, uint32_t height);
-    VkImage createYUVStorageImage(uint32_t width, uint32_t height, VkFormat format);
     void createYUVComputeDescriptorSet();
     // void createYUVComputeDescriptorPool();
     void TransitionYUVToSampling(VkCommandBuffer commandBuffer);
@@ -188,6 +202,17 @@ protected:
     void createYUVSampler();
     void createYUVUniformBuffer();
 
+
+    /**
+     * The following functions and memebers are for supporting renderable rendering.
+     */
+
+    void initForRenderables();
+
+    void createDescriptorPoolForRenderables();
+
+    VkDescriptorPool m_descripotrPoolForRenderables = VK_NULL_HANDLE;
+
 private:
     void *m_pWindow;
     int   m_windowWidth = 0;
@@ -196,7 +221,6 @@ private:
     
     CSJSpVulkanHelper m_pHelper = nullptr; 
     VkInstance  m_VkInstance{nullptr};
-    CSJSpTexture m_pTexData = nullptr;
     
     VkDevice         m_device;
     VkQueue          m_graphics_queue;
@@ -243,6 +267,8 @@ private:
     const std::vector<const char *> m_device_extensions{VK_KHR_SWAPCHAIN_EXTENSION_NAME};
 
     CSJRendererCapabilities m_renderCaps;
+
+    std::vector<CSJSpRenderable> m_renderables;
 
 };
 
