@@ -18,69 +18,11 @@
 
 #include "stb_image.h"
 
+#include "CSJImageRenderable.h"
+
 namespace csjrhi {
 
 const int MAX_FRAMES_IN_FLIGHT = 2;
-
-struct UniformBufferObject {
-    glm::mat4 model;
-    glm::mat4 view;
-    glm::mat4 proj;
-};
-
-struct Vertex {
-    glm::vec2 pos;
-    glm::vec3 color;
-    glm::vec2 texCoord;
-
-    static VkVertexInputBindingDescription getBindingDescription() {
-        VkVertexInputBindingDescription bindingDescription{};
-        bindingDescription.binding = 0;
-        bindingDescription.stride = sizeof(Vertex);
-        bindingDescription.inputRate = VK_VERTEX_INPUT_RATE_VERTEX;
-
-        return bindingDescription;
-    }
-
-    static std::array<VkVertexInputAttributeDescription, 3> getAttributeDescription() {
-        std::array<VkVertexInputAttributeDescription, 3> attributeDescriptions{};
-
-        attributeDescriptions[0].binding = 0;
-        attributeDescriptions[0].location = 0;
-        attributeDescriptions[0].format = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[0].offset = offsetof(Vertex, pos);
-
-        attributeDescriptions[1].binding = 0;
-        attributeDescriptions[1].location = 1;
-        attributeDescriptions[1].format = VK_FORMAT_R32G32B32_SFLOAT;
-        attributeDescriptions[1].offset = offsetof(Vertex, color);
-
-        attributeDescriptions[2].binding = 0;
-        attributeDescriptions[2].location = 2;
-        attributeDescriptions[2].format = VK_FORMAT_R32G32_SFLOAT;
-        attributeDescriptions[2].offset = offsetof(Vertex, texCoord);
-
-        return attributeDescriptions;
-    }
-};
-
-const std::vector<Vertex> img_vertices = {
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {0.0f, 1.0f}},
-    {{ 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {1.0f, 1.0f}},
-    {{ 0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {1.0f, 0.0f}},
-    {{-0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {0.0f, 0.0f}}
-};
-
-const std::vector<Vertex> vertices = {
-    {{-0.5f, -0.5f}, {1.0f, 0.0f, 0.0f}, {1.0f, 0.0f}},
-    {{ 0.5f, -0.5f}, {1.0f, 1.0f, 1.0f}, {0.0f, 0.0f}},
-    {{ 0.5f,  0.5f}, {0.0f, 1.0f, 0.0f}, {0.0f, 1.0f}},
-    {{-0.5f,  0.5f}, {0.0f, 0.0f, 1.0f}, {1.0f, 1.0f}}
-};
-
-const std::vector<uint16_t> indices = {
-    0,1,2,2,3,0
-}; 
 
 // debug callback
 static VKAPI_ATTR VkBool32 VKAPI_CALL debugCallback(VkDebugUtilsMessageSeverityFlagBitsEXT,
@@ -169,26 +111,7 @@ const CSJRendererCapabilities &CSJVulkanRenderer::GetCapabilities() const {
 }
 
 void CSJVulkanRenderer::initVulkan() {
-    createInstance();
-    createSurface();
-    pickPhysicalDevice();
-    createLogicalDevice();
-    createVulkanHelper();
-    createSwapChain();
-    createImageViews();
-    createRenderPass();
-    createDescriptorSetLayout();
-    createGraphicsPipeline();
-    createFrameBuffers();
-    createCommandPool();
-    createTextureImage();
-    createUniformBuffers();
-    createVertexBuffer();
-    createIndexBuffer();
-    createDescriptorPool();
-    createDescriptorSets();
-    createCommandBuffer();
-    createSyncObjects();
+    initForRenderables();
 
     initYUVComputeComponents();
 }
@@ -221,34 +144,17 @@ void CSJVulkanRenderer::cleanup() {
 
     cleanupSwapChain();
 
-    vkDestroyPipeline(m_device, m_graphics_pipeline, nullptr);
-    vkDestroyPipelineLayout(m_device, m_pipeline_layout, nullptr);
     vkDestroyRenderPass(m_device, m_render_pass, nullptr);
-
-    for (size_t i = 0 ; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        vkDestroyBuffer(m_device, m_uniform_buffers[i], nullptr);
-        vkFreeMemory(m_device, m_uniform_buffer_memories[i], nullptr);
-    }
 
     vkDestroyDescriptorPool(m_device, m_descriptor_pool, nullptr);
 
-    /**
-     * The TextureData object holds a vkDevice instance, so the object must
-     * be released before the vkDevice is released.
-     */
-    if (m_pTexData) {
-        m_pTexData.reset();
-    }
-
-    vkDestroyDescriptorSetLayout(m_device, m_descriptorset_layout, nullptr);
-
-    vkDestroyBuffer(m_device, m_index_buffer, nullptr);
-    vkFreeMemory(m_device, m_index_buffer_memory, nullptr);
-
-    vkDestroyBuffer(m_device, m_vertex_buffer, nullptr);
-    vkFreeMemory(m_device, m_vertex_buffer_memory, nullptr);
-
     unInitYUVComputeComponents();
+
+    auto it = m_renderables.begin();
+    while (it != m_renderables.end() ) {
+        (*it)->unInit();
+        it++;
+    }
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
         vkDestroySemaphore(m_device, m_render_finish_semas[i], nullptr);
@@ -495,7 +401,7 @@ void CSJVulkanRenderer::createLogicalDevice() {
 }
 
 void CSJVulkanRenderer::createVulkanHelper() {
-    m_pHelper = std::make_unique<CSJVulkanHelper>(m_device, m_physical_device, m_graphics_queue);
+    m_pHelper = std::make_shared<CSJVulkanHelper>(m_device, m_physical_device, m_graphics_queue);
 }
 
 void CSJVulkanRenderer::createSurface() {
@@ -650,124 +556,7 @@ VkShaderModule CSJVulkanRenderer::createShaderModule(const std::vector<char> &co
 }
 
 void CSJVulkanRenderer::createGraphicsPipeline() {
-    auto vertShaderCode = readFile("resources/shaders/vert.spv");
-    auto fragShaderCode = readFile("resources/shaders/frag.spv");
 
-    VkShaderModule vertShaderModule = createShaderModule(vertShaderCode);
-    VkShaderModule fragShaderModule = createShaderModule(fragShaderCode);
-
-    VkPipelineShaderStageCreateInfo vertShaderStageInfo{};
-    vertShaderStageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    vertShaderStageInfo.stage  = VK_SHADER_STAGE_VERTEX_BIT;
-    vertShaderStageInfo.module = vertShaderModule;
-    vertShaderStageInfo.pName  = "main";
-
-    VkPipelineShaderStageCreateInfo fragShaderStageInfo{};
-    fragShaderStageInfo.sType  = VK_STRUCTURE_TYPE_PIPELINE_SHADER_STAGE_CREATE_INFO;
-    fragShaderStageInfo.stage  = VK_SHADER_STAGE_FRAGMENT_BIT;
-    fragShaderStageInfo.module = fragShaderModule;
-    fragShaderStageInfo.pName  = "main";
-
-    VkPipelineShaderStageCreateInfo shaderStages[] = {vertShaderStageInfo, fragShaderStageInfo};
-
-    auto bindingDescription    = Vertex::getBindingDescription();
-    auto attributeDescriptions = Vertex::getAttributeDescription();
-
-    VkPipelineVertexInputStateCreateInfo vertexInputInfo{};
-    vertexInputInfo.sType                           = VK_STRUCTURE_TYPE_PIPELINE_VERTEX_INPUT_STATE_CREATE_INFO;
-    vertexInputInfo.vertexBindingDescriptionCount   = 1;
-    vertexInputInfo.vertexAttributeDescriptionCount = static_cast<uint32_t>(attributeDescriptions.size());
-    vertexInputInfo.pVertexBindingDescriptions      = &bindingDescription;
-    vertexInputInfo.pVertexAttributeDescriptions    = attributeDescriptions.data();
-
-    VkPipelineInputAssemblyStateCreateInfo inputAssembly{};
-    inputAssembly.sType                  = VK_STRUCTURE_TYPE_PIPELINE_INPUT_ASSEMBLY_STATE_CREATE_INFO;
-    inputAssembly.topology               = VK_PRIMITIVE_TOPOLOGY_TRIANGLE_LIST;
-    inputAssembly.primitiveRestartEnable = VK_FALSE;
-
-    VkPipelineViewportStateCreateInfo viewportState{};
-    viewportState.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
-    viewportState.viewportCount = 1;
-    viewportState.scissorCount  = 1;
-
-    VkPipelineRasterizationStateCreateInfo rasterizer{};
-    rasterizer.sType                   = VK_STRUCTURE_TYPE_PIPELINE_RASTERIZATION_STATE_CREATE_INFO;
-    rasterizer.depthClampEnable        = VK_FALSE;
-    rasterizer.rasterizerDiscardEnable = VK_FALSE;
-    rasterizer.polygonMode             = VK_POLYGON_MODE_FILL;
-    rasterizer.lineWidth               = 1.0f;
-    rasterizer.cullMode                = VK_CULL_MODE_BACK_BIT;
-    rasterizer.frontFace               = VK_FRONT_FACE_COUNTER_CLOCKWISE;
-    rasterizer.depthBiasEnable         = VK_FALSE;
-
-    VkPipelineMultisampleStateCreateInfo multisampling{};
-    multisampling.sType                = VK_STRUCTURE_TYPE_PIPELINE_MULTISAMPLE_STATE_CREATE_INFO;
-    multisampling.sampleShadingEnable  = VK_FALSE;
-    multisampling.rasterizationSamples = VK_SAMPLE_COUNT_1_BIT;
-
-    VkPipelineColorBlendAttachmentState colorBlendAttachment{};
-    colorBlendAttachment.colorWriteMask = VK_COLOR_COMPONENT_R_BIT | 
-                                            VK_COLOR_COMPONENT_G_BIT | 
-                                            VK_COLOR_COMPONENT_B_BIT | 
-                                            VK_COLOR_COMPONENT_A_BIT;
-    colorBlendAttachment.blendEnable    = VK_FALSE;
-
-    VkPipelineColorBlendStateCreateInfo colorBlending{};
-    colorBlending.sType             = VK_STRUCTURE_TYPE_PIPELINE_COLOR_BLEND_STATE_CREATE_INFO;
-    colorBlending.logicOpEnable     = VK_FALSE;
-    colorBlending.logicOp           = VK_LOGIC_OP_COPY;
-    colorBlending.attachmentCount   = 1;
-    colorBlending.pAttachments      = &colorBlendAttachment;
-    colorBlending.blendConstants[0] = 0.0f;
-    colorBlending.blendConstants[1] = 0.0f;
-    colorBlending.blendConstants[2] = 0.0f;
-    colorBlending.blendConstants[3] = 0.0f;
-
-    std::vector<VkDynamicState> dynamicStates = {
-        VK_DYNAMIC_STATE_VIEWPORT,
-        VK_DYNAMIC_STATE_SCISSOR
-    };
-
-    VkPipelineDynamicStateCreateInfo dynamicState{};
-    dynamicState.sType             = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
-    dynamicState.dynamicStateCount = static_cast<uint32_t>(dynamicStates.size());
-    dynamicState.pDynamicStates    = dynamicStates.data();
-
-    VkPipelineLayoutCreateInfo pipelineLayoutInfo{};
-    pipelineLayoutInfo.sType          = VK_STRUCTURE_TYPE_PIPELINE_LAYOUT_CREATE_INFO;
-    pipelineLayoutInfo.setLayoutCount = 1;
-    pipelineLayoutInfo.pSetLayouts    = &m_descriptorset_layout;
-    //pipelineLayoutInfo.pushConstantRangeCount = 0;
-    
-    if (vkCreatePipelineLayout(m_device, &pipelineLayoutInfo, 
-                               nullptr, &m_pipeline_layout) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create pipeline layout!");
-    }
-
-    VkGraphicsPipelineCreateInfo pipelineInfo{};
-    pipelineInfo.sType               = VK_STRUCTURE_TYPE_GRAPHICS_PIPELINE_CREATE_INFO;
-    pipelineInfo.stageCount          = 2;
-    pipelineInfo.pStages             = shaderStages;
-    pipelineInfo.pVertexInputState   = &vertexInputInfo;
-    pipelineInfo.pInputAssemblyState = &inputAssembly;
-    pipelineInfo.pViewportState      = &viewportState;
-    pipelineInfo.pRasterizationState = &rasterizer;
-    pipelineInfo.pMultisampleState   = &multisampling;
-    pipelineInfo.pColorBlendState    = &colorBlending;
-    pipelineInfo.pDynamicState       = &dynamicState;
-    pipelineInfo.layout              = m_pipeline_layout;
-    pipelineInfo.renderPass          = m_render_pass;
-    pipelineInfo.subpass             = 0;
-    pipelineInfo.basePipelineHandle  = VK_NULL_HANDLE;
-
-    if (vkCreateGraphicsPipelines(m_device, VK_NULL_HANDLE, 1, 
-                                  &pipelineInfo, nullptr, 
-                                  &m_graphics_pipeline) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create graphics pipeline!");
-    }
-
-    vkDestroyShaderModule(m_device, fragShaderModule, nullptr);
-    vkDestroyShaderModule(m_device, vertShaderModule, nullptr);
 }
 
 void CSJVulkanRenderer::createRenderPass() {
@@ -899,34 +688,13 @@ void CSJVulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
                             nullptr);
     vkCmdDraw(commandBuffer, 6, 1, 0, 0);
 
+    auto it = m_renderables.begin();
+    while (it != m_renderables.end()) {
 
-    vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphics_pipeline);
-    VkViewport viewport{};
-    viewport.x        = 0.0f;
-    viewport.y        = 0.0f;
-    viewport.width    = (float) m_swapchain_extent.width;
-    viewport.height   = (float) m_swapchain_extent.height;
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+        (*it)->render(nullptr, 0.0);
 
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = m_swapchain_extent;
-    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);    
-
-    VkBuffer vertexBuffers[] = {
-        m_vertex_buffer
-    };        
-    VkDeviceSize offsets[] = {0};
-    vkCmdBindVertexBuffers(commandBuffer, 0, 1, vertexBuffers, offsets);
-    vkCmdBindIndexBuffer(commandBuffer, m_index_buffer, 0, VK_INDEX_TYPE_UINT16);
-
-    vkCmdBindDescriptorSets(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS,
-                            m_pipeline_layout, 0, 1, &m_descriptor_sets[m_current_frame], 0, nullptr);
-
-    vkCmdDrawIndexed(commandBuffer, static_cast<uint32_t>(indices.size()), 1, 0, 0,  0);
-    //vkCmdDraw(commandBuffer, static_cast<uint32_t>(vertices.size()), 1, 0, 0);
+        it++;
+    }
 
     vkCmdEndRenderPass(commandBuffer);
 
@@ -956,32 +724,6 @@ void CSJVulkanRenderer::createSyncObjects() {
     }
 }
 
-void CSJVulkanRenderer::createDescriptorSetLayout() {
-    VkDescriptorSetLayoutBinding uboLayoutBinding{};
-    uboLayoutBinding.binding            = 0;
-    uboLayoutBinding.descriptorCount    = 1;
-    uboLayoutBinding.descriptorType     = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    uboLayoutBinding.pImmutableSamplers = nullptr;
-    uboLayoutBinding.stageFlags         = VK_SHADER_STAGE_VERTEX_BIT;
-
-    VkDescriptorSetLayoutBinding samplerLayoutBinding{};
-    samplerLayoutBinding.binding            = 1;
-    samplerLayoutBinding.descriptorCount    = 1;
-    samplerLayoutBinding.descriptorType     = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    samplerLayoutBinding.pImmutableSamplers = nullptr;
-    samplerLayoutBinding.stageFlags         = VK_SHADER_STAGE_FRAGMENT_BIT;
-
-    std::array<VkDescriptorSetLayoutBinding, 2> bindings = {uboLayoutBinding, samplerLayoutBinding};
-    VkDescriptorSetLayoutCreateInfo layoutInfo{};
-    layoutInfo.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
-    layoutInfo.pBindings    = bindings.data();
-
-    if (vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_descriptorset_layout) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create descriptor set layout");
-    }
-}
-
 void CSJVulkanRenderer::createDescriptorPool() {
     std::array<VkDescriptorPoolSize, 2> poolSizes{};
     poolSizes[0].type            = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
@@ -998,133 +740,6 @@ void CSJVulkanRenderer::createDescriptorPool() {
     if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descriptor_pool) != VK_SUCCESS) {
         throw std::runtime_error("failed to create diecriptor pool!");
     }
-}
-
-void CSJVulkanRenderer::createDescriptorSets() {
-    std::vector<VkDescriptorSetLayout> layouts(MAX_FRAMES_IN_FLIGHT, m_descriptorset_layout);
-    VkDescriptorSetAllocateInfo allocInfo{};
-    allocInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool     = m_descriptor_pool;
-    allocInfo.descriptorSetCount = static_cast<uint32_t>(MAX_FRAMES_IN_FLIGHT);
-    allocInfo.pSetLayouts        = layouts.data();
-
-    m_descriptor_sets.resize(MAX_FRAMES_IN_FLIGHT);
-    if (vkAllocateDescriptorSets(m_device, &allocInfo, m_descriptor_sets.data()) != VK_SUCCESS) {
-        throw std::runtime_error("failed to allocate descriptor sets!");
-    }
-
-    for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        VkDescriptorBufferInfo bufferInfo{};
-        bufferInfo.buffer = m_uniform_buffers[i];
-        bufferInfo.offset = 0;
-        bufferInfo.range  = sizeof(UniformBufferObject);
-
-        VkDescriptorImageInfo imageInfo{};
-        imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-        imageInfo.imageView   = static_cast<VkImageView>(m_pTexData->GetNativeHandle());
-        imageInfo.sampler     = static_cast<VkSampler>(m_pTexData->GetSampler());
-
-        std::array<VkWriteDescriptorSet, 2> descriptorWrites{};
-
-        descriptorWrites[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[0].dstSet          = m_descriptor_sets[i];
-        descriptorWrites[0].dstBinding      = 0;
-        descriptorWrites[0].dstArrayElement = 0;
-        descriptorWrites[0].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-        descriptorWrites[0].descriptorCount = 1;
-        descriptorWrites[0].pBufferInfo     = &bufferInfo;
-
-        descriptorWrites[1].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-        descriptorWrites[1].dstSet          = m_descriptor_sets[i];
-        descriptorWrites[1].dstBinding      = 1;
-        descriptorWrites[1].dstArrayElement = 0;
-        descriptorWrites[1].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-        descriptorWrites[1].descriptorCount = 1;
-        descriptorWrites[1].pImageInfo      = &imageInfo;
-
-        vkUpdateDescriptorSets(m_device, 
-                               static_cast<uint32_t>(descriptorWrites.size()),
-                               descriptorWrites.data(),
-                               0, nullptr);
-    }
-}
-
-void CSJVulkanRenderer::createUniformBuffers() {
-    VkDeviceSize bufferSize = sizeof(UniformBufferObject);
-
-    m_uniform_buffers.resize(MAX_FRAMES_IN_FLIGHT);
-    m_uniform_buffer_memories.resize(MAX_FRAMES_IN_FLIGHT);
-    m_uniform_buffer_mappeds.resize(MAX_FRAMES_IN_FLIGHT);
-
-    for (size_t i = 0 ; i < MAX_FRAMES_IN_FLIGHT; i++) {
-        createBuffer(bufferSize,
-                     VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
-                     VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                     m_uniform_buffers[i],
-                     m_uniform_buffer_memories[i]);
-        
-        vkMapMemory(m_device, m_uniform_buffer_memories[i], 0, bufferSize, 0, &m_uniform_buffer_mappeds[i]);
-    }
-}
-
-void CSJVulkanRenderer::createVertexBuffer() {
-
-    std::vector<Vertex> current_vertices = img_vertices;
-    VkDeviceSize bufferSize = sizeof(current_vertices[0]) * current_vertices.size();
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    createBuffer(bufferSize, 
-                 VK_BUFFER_USAGE_TRANSFER_SRC_BIT,
-                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                 stagingBuffer,
-                 stagingBufferMemory);
-
-    void *data;
-    vkMapMemory(m_device, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, current_vertices.data(), (size_t)bufferSize);
-    vkUnmapMemory(m_device, stagingBufferMemory);
-
-    createBuffer(bufferSize, 
-                 VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_VERTEX_BUFFER_BIT, 
-                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                 m_vertex_buffer,
-                 m_vertex_buffer_memory);
-    
-    copyBuffer(stagingBuffer, m_vertex_buffer, bufferSize);
-
-    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
-    vkFreeMemory(m_device, stagingBufferMemory, nullptr);
-}
-
-void CSJVulkanRenderer::createIndexBuffer() {
-    VkDeviceSize bufferSize = sizeof(indices[0]) * indices.size();
-
-    VkBuffer stagingBuffer;
-    VkDeviceMemory stagingBufferMemory;
-    createBuffer(bufferSize, VK_BUFFER_USAGE_TRANSFER_SRC_BIT, 
-                 VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT | VK_MEMORY_PROPERTY_HOST_COHERENT_BIT,
-                 stagingBuffer, stagingBufferMemory);
-
-    void *data;
-    vkMapMemory(m_device, stagingBufferMemory, 0, bufferSize, 0, &data);
-    memcpy(data, indices.data(), (size_t)bufferSize);
-    vkUnmapMemory(m_device, stagingBufferMemory);
-
-    createBuffer(bufferSize, 
-                 VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_INDEX_BUFFER_BIT,
-                 VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT,
-                 m_index_buffer, m_index_buffer_memory);
-
-    copyBuffer(stagingBuffer, m_index_buffer, bufferSize);
-
-    vkDestroyBuffer(m_device, stagingBuffer, nullptr);
-    vkFreeMemory(m_device, stagingBufferMemory, nullptr);
-}
-
-void CSJVulkanRenderer::createTextureImage() {
-    std::string imagePath("E:\\technology\\Personal_Projects\\CSJImageView\\resources\\originImages\\slamDumk_images\\cross_street.jpeg");
-
-    m_pTexData = m_pHelper->CreateTextureFromFile(imagePath);
 }
 
 void CSJVulkanRenderer::createBuffer(VkDeviceSize size,
@@ -1190,22 +805,6 @@ void CSJVulkanRenderer::copyBuffer(VkBuffer srcBuffer, VkBuffer dstBuffer, VkDev
     vkFreeCommandBuffers(m_device, m_command_pool, 1, &commandBuffer);
 }
 
-void CSJVulkanRenderer::updateUniformBuffer(uint32_t currentImage) {
-    static auto startTime = std::chrono::high_resolution_clock::now();
-
-    auto currentTime = std::chrono::high_resolution_clock::now();
-    float time = std::chrono::duration<float, std::chrono::seconds::period>(currentTime - startTime).count();
-
-    UniformBufferObject ubo{};
-    ubo.model    = glm::rotate(glm::mat4(1.0f), 0.0f/*time * glm::radians(90.0f)*/, glm::vec3(0.0f, 0.0f, 1.0f));
-    ubo.view     = glm::mat4(1.0f);//glm::lookAt(glm::vec3(2.0f, 2.0f, 2.0f), glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 0.0f, 1.0f));
-    float aspect = (float) m_swapchain_extent.width / (float) m_swapchain_extent.height;
-    ubo.proj     = glm::mat4(1.0f);//glm::perspective(glm::radians(1.0f), aspect, 0.1f, 10.0f);
-    ubo.proj[1][1] *= -1;
-
-    memcpy(m_uniform_buffer_mappeds[m_current_frame], &ubo, sizeof(ubo));
-}
-
 void CSJVulkanRenderer::drawFrame() {
     vkWaitForFences(m_device, 1, &m_in_flight_fences[m_current_frame], VK_TRUE, UINT64_MAX);
     vkResetFences(m_device, 1, &m_in_flight_fences[m_current_frame]);
@@ -1221,8 +820,6 @@ void CSJVulkanRenderer::drawFrame() {
         std::cout << "Require next image failed!" << std::endl;
         return ;
     }
-
-    updateUniformBuffer(m_current_frame);
 
     vkResetCommandBuffer(m_command_buffers[m_current_frame], 0);
     recordCommandBuffer(m_command_buffers[m_current_frame], imageIndex);
@@ -1461,39 +1058,6 @@ void CSJVulkanRenderer::createYUVComputePipeline() {
     std::cout << "[VulkanRenderer] Compute pipeline created." << std::endl;
 }
 
-void CSJVulkanRenderer::createYUVStorageImages(uint32_t width, uint32_t height) {
-    //  // Y plane: full resolution
-    // m_yuvYImage = createYUVStorageImage(width, height, VK_FORMAT_R8_UNORM);
-    // m_yuvUImage = createYUVStorageImage(width / 2, height / 2, VK_FORMAT_R8_UNORM);
-    // m_yuvVImage = createYUVStorageImage(width / 2, height / 2, VK_FORMAT_R8_UNORM);
-}
-
-VkImage CSJVulkanRenderer::createYUVStorageImage(uint32_t width, uint32_t height, VkFormat format) {
-    // VkImageCreateInfo imageInfo{};
-    // imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
-    // imageInfo.imageType = VK_IMAGE_TYPE_2D;
-    // imageInfo.extent.width = width;
-    // imageInfo.extent.height = height;
-    // imageInfo.extent.depth = 1;
-    // imageInfo.mipLevels = 1;
-    // imageInfo.arrayLayers = 1;
-    // imageInfo.format = format;
-    // imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
-    // imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    // imageInfo.usage = VK_IMAGE_USAGE_STORAGE_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
-    // imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
-
-    VkImage image;
-    // if (vkCreateImage(m_device, &imageInfo, nullptr, &image) != VK_SUCCESS) {
-    //     throw std::runtime_error("failed to create storage image!");
-    // }
-
-    // Allocate and bind memory...
-    // (same as texture creation, but with STORAGE_BIT usage)
-
-    return image;
-}
-
 void CSJVulkanRenderer::createYUVComputeDescriptorSet() {
     // 1. Allocate descriptor set
     VkDescriptorSetAllocateInfo allocInfo{};
@@ -1551,39 +1115,6 @@ void CSJVulkanRenderer::createYUVComputeDescriptorSet() {
 
     vkUpdateDescriptorSets(m_device, static_cast<uint32_t>(writes.size()), writes.data(), 0, nullptr);
 }
-
-// void CSJVulkanRenderer::createYUVComputeDescriptorPool() {
-//     // 1. Define the pool sizes (what types and how many)
-//     std::array<VkDescriptorPoolSize, 4> poolSizes{};
-
-//     // Storage images (Y, U, V)
-//     poolSizes[0].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
-//     poolSizes[0].descriptorCount = 3;
-
-//     // Uniform buffer (time, aspect ratio)
-//     poolSizes[1].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-//     poolSizes[1].descriptorCount = 1;
-
-//     // Combined image samplers (for fragment shader)
-//     poolSizes[2].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-//     poolSizes[2].descriptorCount = 3;
-
-//     // Uniform buffers (for graphics pipeline)
-//     poolSizes[3].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-//     poolSizes[3].descriptorCount = 1;
-
-//     // 2. Create the pool
-//     VkDescriptorPoolCreateInfo poolInfo{};
-//     poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-//     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
-//     poolInfo.maxSets = 2;  // 1 for compute, 1 for graphics (or more if needed)
-//     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
-//     poolInfo.pPoolSizes = poolSizes.data();
-
-//     if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_yuvComputeDescirptorPool) != VK_SUCCESS) {
-//         throw std::runtime_error("failed to create descriptor pool!");
-//     }
-// }
 
 void CSJVulkanRenderer::TransitionYUVToSampling(VkCommandBuffer commandBuffer) {
     auto barrier = [&](VkImage image, VkImageLayout oldLayout, VkImageLayout newLayout) {
@@ -2071,6 +1602,77 @@ void CSJVulkanRenderer::createYUVUniformBuffer() {
     vkAllocateMemory(m_device, &alloc, nullptr, &m_yuvUniformBufferMemory);
     vkBindBufferMemory(m_device, m_yuvUniformBuffer, m_yuvUniformBufferMemory, 0);
     vkMapMemory(m_device, m_yuvUniformBufferMemory, 0, sizeof(YUVUniforms), 0, &m_yuvUniformBufferMapped);
+}
+
+void CSJVulkanRenderer::initForRenderables() {
+    createInstance();
+    createSurface();
+    pickPhysicalDevice();
+    createLogicalDevice();
+    createVulkanHelper();
+    createSwapChain();
+    createImageViews();
+    createRenderPass();
+    createFrameBuffers();
+    createCommandPool();
+    createCommandBuffer();
+    createDescriptorPoolForRenderables();
+    createSyncObjects();
+
+    CSJSpRenderable imageRenderable = std::make_shared<CSJImageRenderable>();
+    imageRenderable->init((void *)this);
+    m_renderables.push_back(imageRenderable);
+
+    // TODO: create the two renderables.
+}
+
+void CSJVulkanRenderer::createDescriptorPoolForRenderables()
+{
+    // ------------------------------------------------------------
+    // 1. Define how many descriptors of each type we need
+    // ------------------------------------------------------------
+    // These counts cover ALL renderables that will exist:
+    // - PNG renderable: 1 combined image sampler
+    // - YUV renderable (compute): 3 storage images + 1 uniform buffer
+    // - YUV renderable (graphics): 3 combined image samplers
+    // - Future (post‑processing, 3D models, etc.): reserve 2 extra slots
+    // ------------------------------------------------------------
+    std::array<VkDescriptorPoolSize, 3> poolSizes{};
+
+    // Combined image samplers (for graphics pipelines)
+    poolSizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    poolSizes[0].descriptorCount = 6;   // PNG(1) + YUV(3) + future(2)
+
+    // Storage images (for compute pipelines)
+    poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
+    poolSizes[1].descriptorCount = 3;   // YUV compute: Y, U, V
+
+    // Uniform buffers (for compute and graphics)
+    poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    poolSizes[2].descriptorCount = 2;   // YUV compute(1) + future(1)
+
+    // ------------------------------------------------------------
+    // 2. Create the pool
+    // ------------------------------------------------------------
+    VkDescriptorPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+
+    // Flags: allow individual descriptor sets to be freed
+    poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+
+    // Maximum number of descriptor sets that can be allocated
+    poolInfo.maxSets = 3;   // PNG(1) + YUV compute(1) + YUV graphics(1)
+
+    // Point to the pool size array
+    poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
+    poolInfo.pPoolSizes = poolSizes.data();
+
+    // ------------------------------------------------------------
+    // 3. Create the pool
+    // ------------------------------------------------------------
+    if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descripotrPoolForRenderables) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create descriptor pool!");
+    }
 }
 
 } // namespace csjrhi
