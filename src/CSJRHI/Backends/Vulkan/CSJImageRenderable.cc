@@ -99,6 +99,10 @@ bool CSJImageRenderable::isReady() const {
     return false;
 }
 
+void CSJImageRenderable::updateScene() {
+    
+}
+
 void CSJImageRenderable::render(void *commandHandle, float timeStamp) {
     if (!m_render_handler) {
         return ;
