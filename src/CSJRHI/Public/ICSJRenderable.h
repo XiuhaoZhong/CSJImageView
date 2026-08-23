@@ -15,6 +15,7 @@ public:
 
     virtual bool init(void* rendererHanle) = 0;
     virtual bool isReady() const = 0;
+    virtual void updateScene() = 0;
     virtual void render(void* commandHandle, float timeStamp) = 0;
     virtual void onResize(uint32_t width, uint32_t height) = 0;
     virtual void unInit() = 0;

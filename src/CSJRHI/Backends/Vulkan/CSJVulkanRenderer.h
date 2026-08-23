@@ -69,6 +69,10 @@ public:
         return m_device;
     }
 
+    VkPhysicalDevice getPhysicalDevice() const {
+        return m_physical_device;
+    }
+
     VkRenderPass getRenderPass() const {
         return m_render_pass;
     }
@@ -87,6 +91,14 @@ public:
 
     CSJSpVulkanHelper getHelper() const {
         return m_pHelper;
+    }
+
+    int getWindowWidth() const {
+        return m_windowWidth;
+    }
+
+    int getWindowHeight() const {
+        return m_windowHeight;
     }
 
 protected:
@@ -122,8 +134,6 @@ protected:
 
     void createImageViews();
 
-    void createGraphicsPipeline();
-
     void createRenderPass();
 
     void createFrameBuffers();
@@ -145,73 +155,12 @@ protected:
     uint32_t findMemoryType(uint32_t typeFilter, VkMemoryPropertyFlags properties);
 
     /**
-     * The next functions are for yuv frame generating and rendering.
-     */
-
-    VkDescriptorPool m_yuvDescriptorPool                  = VK_NULL_HANDLE;
-    VkDescriptorSetLayout m_yuvComputeDescriptorSetLayout = VK_NULL_HANDLE;
-    VkPipelineLayout      m_yuvComputePipelineLayout      = VK_NULL_HANDLE;
-    VkPipeline            m_yuvComputePipeline            = VK_NULL_HANDLE;
-    VkDescriptorSet       m_yuvComputeDescriptorSet       = VK_NULL_HANDLE;
-
-    VkImage     m_yuvYImage     = VK_NULL_HANDLE;
-    VkImageView m_yuvYImageView = VK_NULL_HANDLE;
-    VkDeviceMemory m_yuvYMemory = VK_NULL_HANDLE;
-    VkImage     m_yuvUImage     = VK_NULL_HANDLE;
-    VkImageView m_yuvUImageView = VK_NULL_HANDLE;
-    VkDeviceMemory m_yuvUMemory = VK_NULL_HANDLE;
-    VkImage     m_yuvVImage     = VK_NULL_HANDLE;
-    VkImageView m_yuvVImageView = VK_NULL_HANDLE;
-    VkDeviceMemory m_yuvVMemory = VK_NULL_HANDLE;
-
-    VkBuffer m_yuvUniformBuffer = VK_NULL_HANDLE;
-    VkDeviceMemory m_yuvUniformBufferMemory = VK_NULL_HANDLE;
-    void* m_yuvUniformBufferMapped = nullptr;
-
-    float m_time = 0.0f;
-
-    void createyuvDescriptorPool();
-    void createYUVComputeDescriptorSetLayout();
-    void createYUVComputePipelineLayout();
-    void createYUVComputePipeline();
-    void createYUVComputeDescriptorSet();
-    // void createYUVComputeDescriptorPool();
-    void TransitionYUVToSampling(VkCommandBuffer commandBuffer);
-
-    void generateYUVFrame(VkCommandBuffer commandBuffer, float time);
-
-    void initYUVComputeComponents();
-    void unInitYUVComputeComponents();
-
-    /**
-     * The yuv rendering components.
-     */
-    VkDescriptorSetLayout m_yuvDescriptorSetLayout = VK_NULL_HANDLE;
-    VkPipelineLayout      m_yuvPipelineLayout      = VK_NULL_HANDLE;
-    VkPipeline            m_yuvPipeline            = VK_NULL_HANDLE;
-    VkDescriptorSet       m_yuvDescriptorSet       = VK_NULL_HANDLE;
-    VkDescriptorPool      m_yuvDescirptorPool      = VK_NULL_HANDLE;
-    VkSampler             m_yuvSampler             = VK_NULL_HANDLE;
-
-    void createYUVStorageImages();
-    void createYUVImageViews();
-    void createYUVDescriptorSetLayout();
-    void createYUVPipelineLayout();
-    void createYUVPipeline();
-    void createYUVDescriptorSet();
-    void createYUVSampler();
-    void createYUVUniformBuffer();
-
-
-    /**
      * The following functions and memebers are for supporting renderable rendering.
      */
 
     void initForRenderables();
 
     void createDescriptorPoolForRenderables();
-
-    VkDescriptorPool m_descripotrPoolForRenderables = VK_NULL_HANDLE;
 
 private:
     void *m_pWindow;
@@ -236,24 +185,13 @@ private:
     std::vector<VkFramebuffer> m_swapchain_frame_buffers;
 
     VkRenderPass          m_render_pass;
-    VkDescriptorSetLayout m_descriptorset_layout;
-    VkPipelineLayout      m_pipeline_layout;
-    VkPipeline            m_graphics_pipeline;
     VkCommandPool         m_command_pool;
     std::vector<VkCommandBuffer> m_command_buffers;
 
-    VkDescriptorPool m_descriptor_pool;
-    std::vector<VkDescriptorSet> m_descriptor_sets;
-
-    VkBuffer         m_vertex_buffer;
-    VkDeviceMemory   m_vertex_buffer_memory;
-
-    VkBuffer         m_index_buffer;
-    VkDeviceMemory   m_index_buffer_memory;
-
-    std::vector<VkBuffer>       m_uniform_buffers;
-    std::vector<VkDeviceMemory> m_uniform_buffer_memories;
-    std::vector<void *>         m_uniform_buffer_mappeds;
+    /* This descriptor pool is for image renderer and yuv renderer. */
+    VkDescriptorPool m_descripotrPoolForRenderables = VK_NULL_HANDLE;
+    /* This descriptor pool is for common rendering in the future. */
+    VkDescriptorPool m_descriptor_pool = VK_NULL_HANDLE;
 
     std::vector<VkSemaphore> m_image_available_semas;
     std::vector<VkSemaphore> m_render_finish_semas;

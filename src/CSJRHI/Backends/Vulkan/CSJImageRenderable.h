@@ -15,6 +15,7 @@ public:
 
     bool init(void* rendererHanle) override;
     bool isReady() const override;
+    void updateScene() override;
     void render(void* commandHandle, float timeStamp) override;
     void onResize(uint32_t width, uint32_t height) override;
     void unInit() override;
