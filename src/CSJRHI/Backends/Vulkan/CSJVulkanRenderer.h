@@ -16,6 +16,11 @@
 
 namespace csjrhi {
 
+enum class CSJRenderType : uint8_t {
+    Common = 0,
+    Renderable
+};
+
 using CSJSpVulkanHelper = std::shared_ptr<CSJVulkanHelper>;
 
 struct YUVUniforms {
@@ -39,6 +44,8 @@ struct SwapChainSupportDetails {
     std::vector<VkPresentModeKHR> presentModes;
 };
 
+
+
 class CSJVulkanRenderer : public ICSJRenderer {
 public:
     CSJVulkanRenderer() = default;
@@ -47,7 +54,7 @@ public:
     bool Init(void* windowHandle, int width, int height) override;
     void Shutdown() override;
     void Resize(int width, int height) override;
-    void Render() override;
+    void Render(float timeStamp) override;
     void WaitIdle() override;
     uint32_t CreateTexture(int width, int height, int format, const void* data) override;
     void DestroyTexture(uint32_t textureId) override;
@@ -87,6 +94,10 @@ public:
 
     VkExtent2D getSwapchainExtent() const {
         return m_swapchain_extent;
+    }
+
+    VkSurfaceFormatKHR getSurfaceFormat() const {
+        return m_surfaceFormat;
     }
 
     CSJSpVulkanHelper getHelper() const {
@@ -162,11 +173,22 @@ protected:
 
     void createDescriptorPoolForRenderables();
 
+    void createOffscreenSampler();
+    void createOffscreenResources();
+    void destroyOffscreenResources();
+
+    void reCreateOffscreenResources();
+
+    void TransitionOffscreenToColorAttachment(VkCommandBuffer cmd);
+    void TransitionOffscreenToShaderReadOnly(VkCommandBuffer cmd);
+
 private:
+    CSJRenderType m_renderType = CSJRenderType::Common;
     void *m_pWindow;
     int   m_windowWidth = 0;
     int   m_windowHeight = 0;
     bool  m_bNeedRecreateSwapChain = false;
+    VkImageLayout m_offscreenLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     
     CSJSpVulkanHelper m_pHelper = nullptr; 
     VkInstance  m_VkInstance{nullptr};
@@ -177,6 +199,7 @@ private:
     VkSurfaceKHR     m_surface;
     VkPhysicalDevice m_physical_device = VK_NULL_HANDLE;
 
+    VkSurfaceFormatKHR   m_surfaceFormat;
     VkSwapchainKHR       m_swapchain{nullptr};
     std::vector<VkImage> m_swapchain_images;
     VkFormat             m_swapchain_image_format;
@@ -187,6 +210,12 @@ private:
     VkRenderPass          m_render_pass;
     VkCommandPool         m_command_pool;
     std::vector<VkCommandBuffer> m_command_buffers;
+
+    VkImage         m_offscreenImage;
+    VkDeviceMemory  m_offscreenMemory;
+    VkImageView     m_offscreenImageView;
+    VkFramebuffer   m_offscreenFramebuffer;
+    VkSampler       m_offscreenSampler;
 
     /* This descriptor pool is for image renderer and yuv renderer. */
     VkDescriptorPool m_descripotrPoolForRenderables = VK_NULL_HANDLE;
@@ -206,6 +235,7 @@ private:
 
     CSJRendererCapabilities m_renderCaps;
 
+    CSJSpRenderable m_postProcessRenderable;
     std::vector<CSJSpRenderable> m_renderables;
 
 };

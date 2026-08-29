@@ -169,7 +169,7 @@ void CSJImageRenderable::unInit() {
 }
 
 const char *CSJImageRenderable::GatName() const {
-    return nullptr;
+    return "ImageRenderable";
 }
 
 void CSJImageRenderable::createDescriptorSetLayout() {

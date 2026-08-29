@@ -32,7 +32,7 @@ public:
     /**
      * @brief Rendering a frame. Inner workflow: Acquire -> Draw -> Present.
      */
-    virtual void Render() = 0;
+    virtual void Render(float timeStamp) = 0;
 
     /**
      * @brief Wait for GPU complete all the tasks, Useful for performance measurement

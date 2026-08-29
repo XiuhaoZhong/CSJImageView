@@ -19,6 +19,7 @@
 
 #include "CSJImageRenderable.h"
 #include "CSJYUVRenderable.h"
+#include "CSJPostProcessRenderable.h"
 
 namespace csjrhi {
 
@@ -44,6 +45,8 @@ bool CSJVulkanRenderer::Init(void *windowHandle, int width, int height) {
 
     m_pWindow = windowHandle;
 
+    m_renderType = CSJRenderType::Renderable;
+
     initVulkan();
 
     std::cout << "CSJVulkan Renderer initialize success." << std::endl;
@@ -64,7 +67,7 @@ void CSJVulkanRenderer::Resize(int width, int height) {
     recreateSwapChain();
 }
 
-void CSJVulkanRenderer::Render() {
+void CSJVulkanRenderer::Render(float timeStamp) {
     auto windowSize = getCurrentWindowSize();
     if (m_windowWidth != windowSize[0] || m_windowHeight != windowSize[1]) {
         m_windowWidth = windowSize[0];
@@ -111,7 +114,32 @@ const CSJRendererCapabilities &CSJVulkanRenderer::GetCapabilities() const {
 }
 
 void CSJVulkanRenderer::initVulkan() {
-    initForRenderables();
+
+    createInstance();
+    createSurface();
+    pickPhysicalDevice();
+    createLogicalDevice();
+    createVulkanHelper();
+    createSwapChain();
+    createImageViews();
+    createRenderPass();
+    createFrameBuffers();
+    createCommandPool();
+    createCommandBuffer();
+    // createCommonDescriptorPool();
+    
+    if (m_renderType == CSJRenderType::Renderable) {
+        createDescriptorPoolForRenderables();
+        initForRenderables();
+
+        m_postProcessRenderable = std::make_shared<CSJPostProcessRenderable>();
+        m_postProcessRenderable->init((void *)this);
+
+        createOffscreenResources();
+        createOffscreenSampler();
+    }
+
+    createSyncObjects();
 }
 
 std::array<int, 2> CSJVulkanRenderer::getCurrentWindowSize() {
@@ -146,10 +174,22 @@ void CSJVulkanRenderer::cleanup() {
 
     vkDestroyDescriptorPool(m_device, m_descriptor_pool, nullptr);
 
-    auto it = m_renderables.begin();
-    while (it != m_renderables.end() ) {
-        (*it)->unInit();
-        it++;
+    if (m_renderType == CSJRenderType::Renderable) {
+        auto it = m_renderables.begin();
+        while (it != m_renderables.end() ) {
+            (*it)->unInit();
+            it++;
+        }
+    }
+
+    if (m_postProcessRenderable) {
+        m_postProcessRenderable->unInit();
+    }
+
+    destroyOffscreenResources();
+
+    if (m_offscreenSampler) {
+        vkDestroySampler(m_device, m_offscreenSampler, nullptr);
     }
 
     for (size_t i = 0; i < MAX_FRAMES_IN_FLIGHT; i++) {
@@ -430,6 +470,8 @@ void CSJVulkanRenderer::createSwapChain() {
     VkPresentModeKHR presentMode = chooseSwapPresentMode(swapChainSupport.presentModes);
     VkExtent2D extent = chooseSwapExtent(swapChainSupport.capabilities);
 
+    m_surfaceFormat = surfaceFormat;
+
     uint32_t imageCount = swapChainSupport.capabilities.minImageCount;
     if (swapChainSupport.capabilities.maxImageCount > 0 && 
         imageCount > swapChainSupport.capabilities.maxImageCount) {
@@ -493,6 +535,8 @@ void CSJVulkanRenderer::recreateSwapChain() {
     createSwapChain();
     createImageViews();
     createFrameBuffers();
+
+    reCreateOffscreenResources();
 
     auto it = m_renderables.begin();
     while (it != m_renderables.end()) {
@@ -566,7 +610,7 @@ void CSJVulkanRenderer::createRenderPass() {
     colorAttachment.stencilLoadOp   = VK_ATTACHMENT_LOAD_OP_DONT_CARE;
     colorAttachment.stencilStoreOp  = VK_ATTACHMENT_STORE_OP_DONT_CARE;
     colorAttachment.initialLayout   = VK_IMAGE_LAYOUT_UNDEFINED;
-    colorAttachment.finalLayout     = VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
+    colorAttachment.finalLayout     = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;//VK_IMAGE_LAYOUT_PRESENT_SRC_KHR;
 
     VkAttachmentReference colorAttachmentRef{};
     colorAttachmentRef.attachment = 0;
@@ -653,37 +697,71 @@ void CSJVulkanRenderer::createCommandBuffer() {
 void CSJVulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint32_t imageIndex) {
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = 0;
+    beginInfo.pInheritanceInfo = nullptr;
 
     if (vkBeginCommandBuffer(commandBuffer, &beginInfo) != VK_SUCCESS) {
         throw std::runtime_error("failed to begin recording command buffer!");
     }
 
-    auto updateIt = m_renderables.begin();
-    while (updateIt != m_renderables.end()) {
-        (*updateIt)->updateScene();
-
-        updateIt++;
+    for (auto& renderable : m_renderables) {
+        renderable->updateScene();
     }
 
-    VkRenderPassBeginInfo renderPassInfo{};
-    renderPassInfo.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
-    renderPassInfo.renderPass        = m_render_pass;
-    renderPassInfo.framebuffer       = m_swapchain_frame_buffers[imageIndex];
-    renderPassInfo.renderArea.offset = {0, 0};
-    renderPassInfo.renderArea.extent = m_swapchain_extent;
+    CSJSpPostProcessRenderable postProcess = std::dynamic_pointer_cast<CSJPostProcessRenderable>(m_postProcessRenderable);
 
-    VkClearValue clearColor        = {{{0.0f, 0.0f, 0.0f, 1.0f}}};
-    renderPassInfo.clearValueCount = 1;
-    renderPassInfo.pClearValues    = &clearColor;
+    TransitionOffscreenToColorAttachment(commandBuffer);
 
-    vkCmdBeginRenderPass(commandBuffer, &renderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+    VkRenderPassBeginInfo offscreenRenderPassInfo{};
+    offscreenRenderPassInfo.sType = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    offscreenRenderPassInfo.renderPass = m_render_pass;
+    offscreenRenderPassInfo.framebuffer = m_offscreenFramebuffer;
+    offscreenRenderPassInfo.renderArea.offset = {0, 0};
+    offscreenRenderPassInfo.renderArea.extent = m_swapchain_extent;
 
-    auto it = m_renderables.begin();
-    while (it != m_renderables.end()) {
+    VkClearValue clearColor                 = {{1.0f, 0.1f, 0.1f, 1.0f}};
+    offscreenRenderPassInfo.clearValueCount = 1;
+    offscreenRenderPassInfo.pClearValues    = &clearColor;
 
-        (*it)->render(nullptr, 0.0);
+    vkCmdBeginRenderPass(commandBuffer, &offscreenRenderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
 
-        it++;
+    for (auto& renderable : m_renderables) {
+        renderable->render(nullptr, 0.0);
+    }
+
+    vkCmdEndRenderPass(commandBuffer);
+
+    TransitionOffscreenToShaderReadOnly(commandBuffer);
+
+    // TODO: set imageview into post process renderable.
+    postProcess->setInputTexture(m_offscreenImageView, m_offscreenSampler);
+
+    VkRenderPassBeginInfo swapchainRenderPassInfo{};
+    swapchainRenderPassInfo.sType             = VK_STRUCTURE_TYPE_RENDER_PASS_BEGIN_INFO;
+    swapchainRenderPassInfo.renderPass        = m_render_pass;
+    swapchainRenderPassInfo.framebuffer       = m_swapchain_frame_buffers[imageIndex];
+    swapchainRenderPassInfo.renderArea.offset = {0, 0};
+    swapchainRenderPassInfo.renderArea.extent = m_swapchain_extent;
+
+    swapchainRenderPassInfo.clearValueCount = 0;
+    swapchainRenderPassInfo.pClearValues = nullptr;
+
+    vkCmdBeginRenderPass(commandBuffer, &swapchainRenderPassInfo, VK_SUBPASS_CONTENTS_INLINE);
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(m_swapchain_extent.width);
+    viewport.height = static_cast<float>(m_swapchain_extent.height);
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = m_swapchain_extent;
+
+    if (m_postProcessRenderable) {
+        m_postProcessRenderable->render(nullptr, 0.0);
     }
 
     vkCmdEndRenderPass(commandBuffer);
@@ -944,20 +1022,6 @@ uint32_t CSJVulkanRenderer::findMemoryType(uint32_t typeFilter, VkMemoryProperty
 }
 
 void CSJVulkanRenderer::initForRenderables() {
-    createInstance();
-    createSurface();
-    pickPhysicalDevice();
-    createLogicalDevice();
-    createVulkanHelper();
-    createSwapChain();
-    createImageViews();
-    createRenderPass();
-    createFrameBuffers();
-    createCommandPool();
-    createCommandBuffer();
-    createDescriptorPoolForRenderables();
-    createSyncObjects();
-
     CSJSpRenderable yuvRenderable = std::make_shared<CSJYUVRenderable>();
     yuvRenderable->init((void *)this);
     m_renderables.push_back(yuvRenderable);
@@ -1004,7 +1068,7 @@ void CSJVulkanRenderer::createDescriptorPoolForRenderables()
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
     // Maximum number of descriptor sets that can be allocated
-    poolInfo.maxSets = 4;   // PNG(1) + YUV compute(1) + YUV graphics(1)
+    poolInfo.maxSets = 5;   // PNG(1) + YUV compute(1) + YUV graphics(1)
 
     // Point to the pool size array
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
@@ -1016,6 +1080,173 @@ void CSJVulkanRenderer::createDescriptorPoolForRenderables()
     if (vkCreateDescriptorPool(m_device, &poolInfo, nullptr, &m_descripotrPoolForRenderables) != VK_SUCCESS) {
         throw std::runtime_error("failed to create descriptor pool!");
     }
+}
+
+void CSJVulkanRenderer::createOffscreenSampler() {
+    VkSamplerCreateInfo samplerInfo{};
+    samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
+    samplerInfo.magFilter = VK_FILTER_LINEAR;
+    samplerInfo.minFilter = VK_FILTER_LINEAR;
+    samplerInfo.addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+    samplerInfo.addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_EDGE;
+
+    if (vkCreateSampler(m_device, &samplerInfo, nullptr, &m_offscreenSampler) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create sampler!");
+    }
+}
+
+void CSJVulkanRenderer::createOffscreenResources()
+{
+    // 1. Create the image
+    VkImageCreateInfo imageInfo{};
+    imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
+    imageInfo.imageType = VK_IMAGE_TYPE_2D;
+    imageInfo.extent.width = m_swapchain_extent.width;
+    imageInfo.extent.height = m_swapchain_extent.height;
+    imageInfo.extent.depth = 1;
+    imageInfo.mipLevels = 1;
+    imageInfo.arrayLayers = 1;
+    imageInfo.format = m_surfaceFormat.format;  // Same as swapchain
+    imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
+    imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    imageInfo.usage = VK_IMAGE_USAGE_COLOR_ATTACHMENT_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
+    imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
+
+    if (vkCreateImage(m_device, &imageInfo, nullptr, &m_offscreenImage) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create offscreen image!");
+    }
+
+    // 2. Allocate memory
+    VkMemoryRequirements memRequirements;
+    vkGetImageMemoryRequirements(m_device, m_offscreenImage, &memRequirements);
+
+    VkMemoryAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    allocInfo.allocationSize = memRequirements.size;
+
+    // Find device-local memory type
+    VkPhysicalDeviceMemoryProperties memProperties;
+    vkGetPhysicalDeviceMemoryProperties(m_physical_device, &memProperties);
+    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
+        if (memRequirements.memoryTypeBits & (1 << i)) {
+            if (memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+                allocInfo.memoryTypeIndex = i;
+                break;
+            }
+        }
+    }
+
+    if (vkAllocateMemory(m_device, &allocInfo, nullptr, &m_offscreenMemory) != VK_SUCCESS) {
+        throw std::runtime_error("failed to allocate offscreen memory!");
+    }
+
+    vkBindImageMemory(m_device, m_offscreenImage, m_offscreenMemory, 0);
+
+    // 3. Create image view
+    VkImageViewCreateInfo viewInfo{};
+    viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
+    viewInfo.image = m_offscreenImage;
+    viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
+    viewInfo.format = m_surfaceFormat.format;
+    viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    viewInfo.subresourceRange.levelCount = 1;
+    viewInfo.subresourceRange.layerCount = 1;
+
+    if (vkCreateImageView(m_device, &viewInfo, nullptr, &m_offscreenImageView) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create offscreen image view!");
+    }
+
+    // 4. Create framebuffer (using the same render pass)
+    VkImageView attachments[] = {m_offscreenImageView};
+
+    VkFramebufferCreateInfo fbInfo{};
+    fbInfo.sType = VK_STRUCTURE_TYPE_FRAMEBUFFER_CREATE_INFO;
+    fbInfo.renderPass = m_render_pass;
+    fbInfo.attachmentCount = 1;
+    fbInfo.pAttachments = attachments;
+    fbInfo.width = m_swapchain_extent.width;
+    fbInfo.height = m_swapchain_extent.height;
+    fbInfo.layers = 1;
+
+    if (vkCreateFramebuffer(m_device, &fbInfo, nullptr, &m_offscreenFramebuffer) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create offscreen framebuffer!");
+    }
+
+    std::cout << "[VulkanRenderer] Offscreen resources created: "
+              << m_swapchain_extent.width << "x" << m_swapchain_extent.height << std::endl;
+}
+
+void CSJVulkanRenderer::destroyOffscreenResources() {
+    if (m_offscreenFramebuffer) {
+        vkDestroyFramebuffer(m_device, m_offscreenFramebuffer, nullptr);
+        m_offscreenFramebuffer = VK_NULL_HANDLE;
+    }
+    if (m_offscreenImageView) {
+        vkDestroyImageView(m_device, m_offscreenImageView, nullptr);
+        m_offscreenImageView = VK_NULL_HANDLE;
+    }
+    if (m_offscreenImage) {
+        vkDestroyImage(m_device, m_offscreenImage, nullptr);
+        m_offscreenImage = VK_NULL_HANDLE;
+    }
+    if (m_offscreenMemory) {
+        vkFreeMemory(m_device, m_offscreenMemory, nullptr);
+        m_offscreenMemory = VK_NULL_HANDLE;
+    }
+}
+
+void CSJVulkanRenderer::reCreateOffscreenResources() {
+    destroyOffscreenResources();
+    createOffscreenResources();
+}
+
+void CSJVulkanRenderer::TransitionOffscreenToColorAttachment(VkCommandBuffer cmd) {
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = m_offscreenLayout;
+    barrier.newLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = m_offscreenImage;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+
+    vkCmdPipelineBarrier(cmd,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        0, 0, nullptr, 0, nullptr,
+        1, &barrier
+    );
+
+    m_offscreenLayout = VK_IMAGE_LAYOUT_COLOR_ATTACHMENT_OPTIMAL;
+}
+
+void CSJVulkanRenderer::TransitionOffscreenToShaderReadOnly(VkCommandBuffer cmd) {
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = m_offscreenLayout;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = m_offscreenImage;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.srcAccessMask = VK_ACCESS_COLOR_ATTACHMENT_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    vkCmdPipelineBarrier(cmd,
+        VK_PIPELINE_STAGE_COLOR_ATTACHMENT_OUTPUT_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        0, 0, nullptr, 0, nullptr,
+        1, &barrier
+    );
+
+    m_offscreenLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
 }
 
 } // namespace csjrhi
