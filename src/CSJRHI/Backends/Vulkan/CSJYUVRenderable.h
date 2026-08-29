@@ -19,7 +19,7 @@ public:
      void unInit() override;
 
      const char* GatName() const override {
-        return "";
+        return "YUVRenderable";
      }
 
 protected:

@@ -85,7 +85,6 @@ void CSJApplication::initWindow() {
     const char** extensions = glfwGetRequiredInstanceExtensions(&count);
 
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
-    //glfwWindowHint(GLFW_RESIZABLE, GLFW_FALSE);
 
     m_pWindow = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
     glfwSetWindowUserPointer(m_pWindow, this);
@@ -106,18 +105,15 @@ void CSJApplication::mainLoop() {
     while (!glfwWindowShouldClose(m_pWindow)) {
         glfwPollEvents();
 
+        double currentFrameTime = glfwGetTime();
+        double deltaTime = currentFrameTime - lastFrameTime; // in second.
+        double deltaTimeMs = deltaTime * 1000.0;             //  transfer to millisecond.
+
+        lastFrameTime = currentFrameTime;
+
         if (m_pRenderer) {
-            m_pRenderer->Render();
+            m_pRenderer->Render((float)deltaTimeMs);
         }
-
-        // double currentFrameTime = glfwGetTime();
-        // double deltaTime = currentFrameTime - lastFrameTime; // in second.
-        // double deltaTimeMs = deltaTime * 1000.0;             //  transfer to millisecond.
-
-        // // 2. output the frame delta time.
-        // std::cout << "Frame time: " << deltaTimeMs << " ms" << std::endl;
-
-        // lastFrameTime = currentFrameTime;
     }
 
     if (m_pRenderer) {

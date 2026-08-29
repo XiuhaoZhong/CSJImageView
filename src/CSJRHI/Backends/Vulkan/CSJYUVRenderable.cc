@@ -694,10 +694,13 @@ void CSJYUVRenderable::TransitionYUVToGeneral(VkCommandBuffer commandBuffer) {
 void CSJYUVRenderable::generateYUVFrame(VkCommandBuffer commandBuffer, float time) {
     auto *renderer = static_cast<CSJVulkanRenderer *>(m_render_handler);
 
-    int windowWidth = renderer->getWindowWidth();
-    int windowHeight = renderer->getWindowHeight();
+    // int windowWidth = renderer->getWindowWidth();
+    // int windowHeight = renderer->getWindowHeight();
 
     auto extent2D = renderer->getSwapchainExtent();
+
+    int windowWidth = extent2D.width;
+    int windowHeight = extent2D.height;
 
     // 1. Update uniform buffer (time, etc.)
     YUVUniforms uniforms{};

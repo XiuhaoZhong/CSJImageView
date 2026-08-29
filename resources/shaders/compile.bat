@@ -9,5 +9,7 @@ start %shader_compiler% shader.frag -o frag.spv
 start %shader_compiler% yuv_generator.comp -o yuv_generator.spv
 start %shader_compiler% yuv_shader.vert -o yuv_vert.spv
 start %shader_compiler% yuv_shader.frag -o yuv_frag.spv
+start %shader_compiler% post_process.vert -o post_process_vert.spv
+start %shader_compiler% post_process.frag -o post_process_frag.spv
 
 pause

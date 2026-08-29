@@ -28,6 +28,7 @@ set(VULKAN_SRC
     CSJVulkanHelper.cc
     CSJImageRenderable.cc
     CSJYUVRenderable.cc
+    CSJPostProcessRenderable.cc
     ${CSJRHI_ROOT_DIR}/Public/CSJRendererFactory.cc
     )
 
