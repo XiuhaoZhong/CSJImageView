@@ -6,66 +6,81 @@
 
 namespace csjrhi {
 
-class CSJVulkanHelper : public ICSJGraphicsHelper {
+struct CSJVulkanHelperContext {
+    VkDevice device = VK_NULL_HANDLE;
+    VkPhysicalDevice physical_device = VK_NULL_HANDLE;
+    VkCommandPool commandPool = VK_NULL_HANDLE;
+    VkQueue queue = VK_NULL_HANDLE;
+    VkCommandBuffer commandBuffer = VK_NULL_HANDLE;
+
+    bool validate() {
+        return (device != VK_NULL_HANDLE &&
+                    physical_device != VK_NULL_HANDLE &&
+                    commandPool != VK_NULL_HANDLE &&
+                    commandBuffer != VK_NULL_HANDLE &&
+                    queue != VK_NULL_HANDLE);
+    }
+};
+
+class CSJVulkanHelper {
 public:
-    CSJVulkanHelper(VkDevice device, VkPhysicalDevice physicalDevice, VkQueue queue);
-    ~CSJVulkanHelper();
+    CSJVulkanHelper() = default;
+    ~CSJVulkanHelper() = default;
     
     // --- Texture ---
-    CSJSpTexture CreateTexture2D(uint32_t width,
-                                 uint32_t height,
-                                 CSJPixelFormat format,           // Abstract format (RGBA8, YUV, etc.)
-                                 const void* data,
-                                 size_t dataSize,
-                                 bool generateMipmaps = false) override;
+    static CSJSpTexture CreateTexture2D(CSJVulkanHelperContext *context,
+                                             uint32_t width,
+                                             uint32_t height,
+                                             VkFormat format,
+                                             const void *data,
+                                             size_t dataSize);
 
-    CSJSpTexture CreateTextureFromFile(const std::string& filePath) override;
+    static void WaitForTextureUpload(CSJSpTexture& info);
+    static bool IsTextureUploadComplete(CSJSpTexture& info);
+    static void DestroyTexture(CSJSpTexture& info);
 
-    void UpdateTexture(ICSJTexture* texture,
-                       const void* data,
-                       size_t dataSize) override;
+    static CSJSpTexture CreateTextureFromFile(CSJVulkanHelperContext *context,
+                                              const std::string& filePath);
 
-    void DestroyTexture(ICSJTexture* texture) override;
+    static void UpdateTexture(ICSJTexture* texture,
+                              const void* data,
+                              size_t dataSize);
+
+    static void DestroyTexture(VkDevice device, ICSJTexture* texture);
 
     // --- Buffer ---
-    CSJSpBuffer CreateBuffer(size_t size,
-                             CSJBufferUsage usage,            // Vertex, Index, Uniform, Staging
-                             const void* data = nullptr) override;
+    static CSJSpBuffer CreateBuffer(VkDevice device, 
+                                    VkPhysicalDevice physical_device,
+                                    size_t size,
+                                    CSJBufferUsage usage, // Vertex, Index, Uniform, Staging
+                                    const void* data = nullptr);
 
-    void UpdateBuffer(ICSJBuffer* buffer,
-                      const void* data,
-                      size_t dataSize,
-                      size_t offset = 0) override;
+    static void UpdateBuffer(VkDevice device,
+                             ICSJBuffer* buffer,
+                             const void* data,
+                             size_t dataSize,
+                             size_t offset = 0) ;
 
-    void DestroyBuffer(ICSJBuffer* buffer) override;
+    static void DestroyBuffer(VkDevice device, ICSJBuffer* buffer);
 
-    // --- Command Buffer (Helper) ---
-    void ExecuteImmediate(const std::function<void(void*)>& commands) override;  // For single-time commands (e.g., upload data)
-
-// --- Info ---
-    std::string GetBackendName() const override;
-    void* GetDeviceHandle() const override;
+    // --- Info ---
+    static std::string GetBackendName();
 
 protected:
-    VkFormat ToVkFormat(CSJPixelFormat format) const;
-    VkBufferUsageFlags ToVkBufferUsage(CSJBufferUsage usage) const;
-    // VkShaderStageFlagBits ToVkShaderStage(CSJShaderStage stage) const;
-    VkCommandBuffer BeginSingleTimeCommands();
-    void EndSingleTimeCommands(VkCommandBuffer commandBuffer);
+    static VkFormat ToVkFormat(CSJPixelFormat format);
+    static VkBufferUsageFlags ToVkBufferUsage(CSJBufferUsage usage);
+    static VkCommandBuffer BeginSingleTimeCommands(VkDevice device, VkCommandPool commadPool);
+    static void EndSingleTimeCommands(VkDevice device,
+                                      VkCommandBuffer commandBuffer,
+                                      VkCommandPool commadPool,
+                                      VkQueue queue);
 
-    void TransitionImageLayout(
-        VkImage image,
-        VkFormat format,
-        VkImageLayout oldLayout,
-        VkImageLayout newLayout
-    );
-
-    void CopyBufferToImage(
-        VkBuffer buffer,
-        VkImage image,
-        uint32_t width,
-        uint32_t height
-    );
+    static void CopyBufferToImage(VkDevice device,
+                                  VkCommandPool commandPool,
+                                  VkQueue queue,VkBuffer buffer,
+                                  VkImage image,
+                                  uint32_t width,
+                                  uint32_t height);
 
 private:
 
@@ -82,20 +97,18 @@ private:
         uint32_t height       = 0;
         CSJPixelFormat format = CSJPixelFormat::CSJPixelFormat_NONE;
         uint32_t mipLevels    = 1;
+        VkFence fence = VK_NULL_HANDLE;
+        bool isComplete = false;
 
         // ITexture interface
-        void* GetNativeHandle() override { return reinterpret_cast<void*>(view); }
-        void* GetSampler() override { return reinterpret_cast<void*>(sampler);}
-        uint32_t GetWidth() const override { return width; }
-        uint32_t GetHeight() const override { return height; }
-        uint32_t GetMipLevels() const override { return mipLevels; }
-        CSJPixelFormat GetFormat() const override { return format; }
+        void* GetNativeHandle()  { return reinterpret_cast<void*>(view); }
+        void* GetSampler()  { return reinterpret_cast<void*>(sampler);}
+        uint32_t GetWidth() const  { return width; }
+        uint32_t GetHeight() const  { return height; }
+        uint32_t GetMipLevels() const  { return mipLevels; }
+        CSJPixelFormat GetFormat() const  { return format; }
 
         ~TextureData() {
-            if (!device) {
-                return ;
-            }
-
             if (sampler) {
                 vkDestroySampler(device, sampler, nullptr);
             }
@@ -112,7 +125,9 @@ private:
                 vkFreeMemory(device, memory, nullptr);
             }
 
-            device = VK_NULL_HANDLE;
+            if (device) {
+                device = VK_NULL_HANDLE;
+            }
         }
     };
 
@@ -122,16 +137,10 @@ private:
         size_t size           = 0;
         CSJBufferUsage usage  = CSJBufferUsage::CSJBufferUsage_None;
 
-        void* GetNativeHandle() override { return reinterpret_cast<void*>(buffer); }
-        size_t GetSize() const override { return size; }
-        CSJBufferUsage GetUsage() const override { return usage; }
+        void* GetNativeHandle()  { return reinterpret_cast<void*>(buffer); }
+        size_t GetSize() const  { return size; }
+        CSJBufferUsage GetUsage() const  { return usage; }
     };
-
-private:
-    VkDevice         m_device;
-    VkPhysicalDevice m_physicalDevice;
-    VkQueue          m_queue;
-    VkCommandPool    m_commandPool;
 };
 
 }

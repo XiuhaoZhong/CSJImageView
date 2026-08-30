@@ -68,7 +68,7 @@ public:
     virtual CSJBufferUsage GetUsage() const = 0;
 };
 
-using CSJSpTexture = std::unique_ptr<ICSJTexture>;
+using CSJSpTexture = std::shared_ptr<ICSJTexture>;
 using CSJSpBuffer = std::unique_ptr<ICSJBuffer>;
 
 // ============================================================

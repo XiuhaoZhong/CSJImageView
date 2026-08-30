@@ -51,10 +51,6 @@ private:
     std::vector<VkDeviceMemory>  m_uniform_buffer_memories;
     std::vector<void *>          m_uniform_buffer_mappeds;
 
-
-
     CSJSpTexture m_pTexData = nullptr;
-
-
 };
 }

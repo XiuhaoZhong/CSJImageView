@@ -44,8 +44,6 @@ struct SwapChainSupportDetails {
     std::vector<VkPresentModeKHR> presentModes;
 };
 
-
-
 class CSJVulkanRenderer : public ICSJRenderer {
 public:
     CSJVulkanRenderer() = default;
@@ -84,6 +82,18 @@ public:
         return m_render_pass;
     }
 
+    VkCommandPool getHelperCommandPool() const {
+        return m_helper_command_pool;
+    }
+
+    VkCommandBuffer getHelperCommandBuffer() const {
+        return m_helper_command_buffer;
+    }
+
+    VkQueue getGraphicsQueue() const {
+        return m_graphics_queue;
+    }
+
     VkCommandBuffer getCommandBuffer() const {
         return m_command_buffers[m_current_frame];
     }
@@ -98,10 +108,6 @@ public:
 
     VkSurfaceFormatKHR getSurfaceFormat() const {
         return m_surfaceFormat;
-    }
-
-    CSJSpVulkanHelper getHelper() const {
-        return m_pHelper;
     }
 
     int getWindowWidth() const {
@@ -135,8 +141,6 @@ protected:
     QueueFamilyIndices findQueueFamilies(VkPhysicalDevice device);
 
     void createLogicalDevice();
-
-    void createVulkanHelper();
 
     void createSurface();
 
@@ -182,6 +186,9 @@ protected:
     void TransitionOffscreenToColorAttachment(VkCommandBuffer cmd);
     void TransitionOffscreenToShaderReadOnly(VkCommandBuffer cmd);
 
+    void createHelperResources();
+    void destroyHelperResources();
+
 private:
     CSJRenderType m_renderType = CSJRenderType::Common;
     void *m_pWindow;
@@ -189,8 +196,6 @@ private:
     int   m_windowHeight = 0;
     bool  m_bNeedRecreateSwapChain = false;
     VkImageLayout m_offscreenLayout = VK_IMAGE_LAYOUT_UNDEFINED;
-    
-    CSJSpVulkanHelper m_pHelper = nullptr; 
     VkInstance  m_VkInstance{nullptr};
     
     VkDevice         m_device;
@@ -210,6 +215,9 @@ private:
     VkRenderPass          m_render_pass;
     VkCommandPool         m_command_pool;
     std::vector<VkCommandBuffer> m_command_buffers;
+
+    VkCommandPool         m_helper_command_pool;
+    VkCommandBuffer       m_helper_command_buffer;
 
     VkImage         m_offscreenImage;
     VkDeviceMemory  m_offscreenMemory;
