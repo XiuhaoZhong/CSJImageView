@@ -336,7 +336,15 @@ void CSJImageRenderable::createImageTexture() {
 
     std::string imagePath("E:\\technology\\Personal_Projects\\CSJImageView\\resources\\originImages\\slamDumk_images\\cross_street.jpeg");
 
-    m_pTexData = renderer->getHelper()->CreateTextureFromFile(imagePath);
+    CSJVulkanHelperContext context;
+    context.device = renderer->getDevice();
+    context.physical_device = renderer->getPhysicalDevice();
+    context.commandPool = renderer->getHelperCommandPool();
+    context.commandBuffer = renderer->getHelperCommandBuffer();
+    context.queue = renderer->getGraphicsQueue();
+
+    m_pTexData = CSJVulkanHelper::CreateTextureFromFile(&context, imagePath);
+    CSJVulkanHelper::WaitForTextureUpload(m_pTexData);
 }
 
 void CSJImageRenderable::createDescriptorSets() {

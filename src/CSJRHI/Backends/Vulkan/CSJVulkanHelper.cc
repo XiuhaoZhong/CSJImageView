@@ -9,34 +9,21 @@
 
 namespace csjrhi {
 
-CSJVulkanHelper::CSJVulkanHelper(VkDevice device, VkPhysicalDevice physicalDevice, VkQueue queue)
-    : m_device(device)
-    , m_physicalDevice(physicalDevice)
-    , m_queue(queue) {
-    // Create a command pool for immediate commands
-    VkCommandPoolCreateInfo poolInfo{};
-    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
-    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
-    poolInfo.queueFamilyIndex = 0; // Assuming graphics queue family index 0
-
-    if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_commandPool) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create command pool for VulkanHelper!");
+CSJSpTexture CSJVulkanHelper::CreateTexture2D(CSJVulkanHelperContext *context,
+                                                   uint32_t width,
+                                                   uint32_t height,
+                                                   VkFormat format,
+                                                   const void *data,
+                                                   size_t dataSize) {
+    if (!context || !context->validate()) {
+        return nullptr;
     }
-}
+    // ──────────────────────────────────────────────
+    // 1. Create the image
+    // ──────────────────────────────────────────────
 
-CSJVulkanHelper::~CSJVulkanHelper() {
-    vkDestroyCommandPool(m_device, m_commandPool, nullptr);
-}
+    auto textureData = std::make_shared<TextureData>();
 
-CSJSpTexture CSJVulkanHelper::CreateTexture2D(uint32_t width, 
-                                              uint32_t height, 
-                                              CSJPixelFormat format, 
-                                              const void *data, 
-                                              size_t dataSize, 
-                                              bool generateMipmaps) {
-    VkFormat vkFormat = ToVkFormat(format);
-
-    // --- 1. Create Image ---
     VkImageCreateInfo imageInfo{};
     imageInfo.sType = VK_STRUCTURE_TYPE_IMAGE_CREATE_INFO;
     imageInfo.imageType = VK_IMAGE_TYPE_2D;
@@ -45,118 +32,236 @@ CSJSpTexture CSJVulkanHelper::CreateTexture2D(uint32_t width,
     imageInfo.extent.depth = 1;
     imageInfo.mipLevels = 1;
     imageInfo.arrayLayers = 1;
-    imageInfo.format = vkFormat;
+    imageInfo.format = format;
     imageInfo.tiling = VK_IMAGE_TILING_OPTIMAL;
     imageInfo.initialLayout = VK_IMAGE_LAYOUT_UNDEFINED;
     imageInfo.usage = VK_IMAGE_USAGE_TRANSFER_DST_BIT | VK_IMAGE_USAGE_SAMPLED_BIT;
     imageInfo.samples = VK_SAMPLE_COUNT_1_BIT;
 
-    VkImage image;
-    if (vkCreateImage(m_device, &imageInfo, nullptr, &image) != VK_SUCCESS) {
-        throw std::runtime_error("failed to create texture image!");
+    if (vkCreateImage(context->device, &imageInfo, nullptr, &textureData->image) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create image!");
     }
 
-    // --- 2. Allocate Memory ---
-    VkMemoryRequirements memRequirements;
-    vkGetImageMemoryRequirements(m_device, image, &memRequirements);
+    // ──────────────────────────────────────────────
+    // 2. Allocate image memory
+    // ──────────────────────────────────────────────
+    VkMemoryRequirements memReqs;
+    vkGetImageMemoryRequirements(context->device, textureData->image, &memReqs);
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    allocInfo.allocationSize = memRequirements.size;
+    allocInfo.allocationSize = memReqs.size;
 
-    VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
+    VkPhysicalDeviceMemoryProperties memProps;
+    vkGetPhysicalDeviceMemoryProperties(context->physical_device, &memProps);
 
-    // Find memory type that is device-local and supports the image
-    for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-        if (memRequirements.memoryTypeBits & (1 << i)) {
-            if (memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
+    bool found = false;
+    for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
+        if (memReqs.memoryTypeBits & (1 << i)) {
+            if (memProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT) {
                 allocInfo.memoryTypeIndex = i;
+                found = true;
                 break;
             }
         }
     }
 
-    VkDeviceMemory imageMemory;
-    if (vkAllocateMemory(m_device, &allocInfo, nullptr, &imageMemory) != VK_SUCCESS) {
-        vkDestroyImage(m_device, image, nullptr);
+    if (!found) {
+        vkDestroyImage(context->device, textureData->image, nullptr);
+        throw std::runtime_error("failed to find suitable memory type for image!");
+    }
+
+    if (vkAllocateMemory(context->device, &allocInfo, nullptr, &textureData->memory) != VK_SUCCESS) {
+        vkDestroyImage(context->device,  textureData->image, nullptr);
         throw std::runtime_error("failed to allocate image memory!");
     }
 
-    vkBindImageMemory(m_device, image, imageMemory, 0);
+    vkBindImageMemory(context->device,  textureData->image, textureData->memory, 0);
 
-    // --- 3. Transition Layout to Transfer Dst ---
-    TransitionImageLayout(image, vkFormat, VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL);
+    // ──────────────────────────────────────────────
+    // 3. Create staging buffer
+    // ──────────────────────────────────────────────
+    VkBufferCreateInfo bufferInfo{};
+    bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    bufferInfo.size = dataSize;
+    bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
 
-    // --- 4. Upload Data (if provided) ---
-    if (data && dataSize > 0) {
-        // Create staging buffer
-        VkBuffer stagingBuffer;
-        VkDeviceMemory stagingMemory;
+    VkBuffer stagingBuffer;
+    if (vkCreateBuffer(context->device, &bufferInfo, nullptr, &stagingBuffer) != VK_SUCCESS) {
+        vkDestroyImage(context->device, textureData->image, nullptr);
+        vkFreeMemory(context->device, textureData->memory, nullptr);
+        throw std::runtime_error("failed to create staging buffer!");
+    }
 
-        VkBufferCreateInfo bufferInfo{};
-        bufferInfo.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-        bufferInfo.size = dataSize;
-        bufferInfo.usage = VK_BUFFER_USAGE_TRANSFER_SRC_BIT;
+    VkMemoryRequirements stagingMemReqs;
+    vkGetBufferMemoryRequirements(context->device, stagingBuffer, &stagingMemReqs);
 
-        vkCreateBuffer(m_device, &bufferInfo, nullptr, &stagingBuffer);
+    VkMemoryAllocateInfo stagingAllocInfo{};
+    stagingAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    stagingAllocInfo.allocationSize = stagingMemReqs.size;
 
-        VkMemoryRequirements stagingMemReqs;
-        vkGetBufferMemoryRequirements(m_device, stagingBuffer, &stagingMemReqs);
-
-        VkMemoryAllocateInfo stagingAllocInfo{};
-        stagingAllocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-        stagingAllocInfo.allocationSize = stagingMemReqs.size;
-
-        for (uint32_t i = 0; i < memProperties.memoryTypeCount; i++) {
-            if (stagingMemReqs.memoryTypeBits & (1 << i)) {
-                if (memProperties.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-                    stagingAllocInfo.memoryTypeIndex = i;
-                    break;
-                }
+    found = false;
+    for (uint32_t i = 0; i < memProps.memoryTypeCount; i++) {
+        if (stagingMemReqs.memoryTypeBits & (1 << i)) {
+            if (memProps.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
+                stagingAllocInfo.memoryTypeIndex = i;
+                found = true;
+                break;
             }
         }
-
-        vkAllocateMemory(m_device, &stagingAllocInfo, nullptr, &stagingMemory);
-        vkBindBufferMemory(m_device, stagingBuffer, stagingMemory, 0);
-
-        // Copy data to staging buffer
-        void* mappedData;
-        vkMapMemory(m_device, stagingMemory, 0, dataSize, 0, &mappedData);
-        memcpy(mappedData, data, dataSize);
-        vkUnmapMemory(m_device, stagingMemory);
-
-        // Copy from staging buffer to image
-        CopyBufferToImage(stagingBuffer, image, width, height);
-
-        // Clean up staging resources
-        vkDestroyBuffer(m_device, stagingBuffer, nullptr);
-        vkFreeMemory(m_device, stagingMemory, nullptr);
     }
 
-    // --- 5. Transition Layout to Shader Read Only ---
-    TransitionImageLayout(image, vkFormat, VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL, VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL);
+    if (!found) {
+        vkDestroyBuffer(context->device, stagingBuffer, nullptr);
+        vkDestroyImage(context->device, textureData->image, nullptr);
+        vkFreeMemory(context->device, textureData->memory, nullptr);
+        throw std::runtime_error("failed to find staging memory type!");
+    }
 
-    // --- 6. Create Image View ---
+    VkDeviceMemory stagingMemory;
+    if (vkAllocateMemory(context->device, &stagingAllocInfo, nullptr, &stagingMemory) != VK_SUCCESS) {
+        vkDestroyBuffer(context->device, stagingBuffer, nullptr);
+        vkDestroyImage(context->device, textureData->image, nullptr);
+        vkFreeMemory(context->device, textureData->memory, nullptr);
+        throw std::runtime_error("failed to allocate staging memory!");
+    }
+
+    vkBindBufferMemory(context->device, stagingBuffer, stagingMemory, 0);
+
+    // ──────────────────────────────────────────────
+    // 4. Copy data to staging buffer
+    // ──────────────────────────────────────────────
+    void* mappedData;
+    vkMapMemory(context->device, stagingMemory, 0, dataSize, 0, &mappedData);
+    memcpy(mappedData, data, dataSize);
+    vkUnmapMemory(context->device, stagingMemory);
+
+    // ──────────────────────────────────────────────
+    // 5. Allocate (or reuse) command buffer
+    // ──────────────────────────────────────────────
+    // Reset the command buffer (reuse)
+    vkResetCommandBuffer(context->commandBuffer, 0);
+
+    // ──────────────────────────────────────────────
+    // 6. Begin recording
+    // ──────────────────────────────────────────────
+    VkCommandBufferBeginInfo beginInfo{};
+    beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
+    beginInfo.flags = VK_COMMAND_BUFFER_USAGE_ONE_TIME_SUBMIT_BIT;
+
+    if (vkBeginCommandBuffer(context->commandBuffer, &beginInfo) != VK_SUCCESS) {
+        throw std::runtime_error("failed to begin command buffer!");
+    }
+
+    // ──────────────────────────────────────────────
+    // 7. Transition image to TRANSFER_DST_OPTIMAL
+    // ──────────────────────────────────────────────
+    VkImageMemoryBarrier barrier{};
+    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
+    barrier.oldLayout = VK_IMAGE_LAYOUT_UNDEFINED;
+    barrier.newLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
+    barrier.image = textureData->image;
+    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    barrier.subresourceRange.levelCount = 1;
+    barrier.subresourceRange.layerCount = 1;
+    barrier.srcAccessMask = 0;
+    barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+
+    vkCmdPipelineBarrier(context->commandBuffer,
+        VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        0, 0, nullptr, 0, nullptr,
+        1, &barrier);
+
+    // ──────────────────────────────────────────────
+    // 8. Copy buffer to image
+    // ──────────────────────────────────────────────
+    VkBufferImageCopy region{};
+    region.bufferOffset = 0;
+    region.bufferRowLength = 0;
+    region.bufferImageHeight = 0;
+    region.imageSubresource.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
+    region.imageSubresource.mipLevel = 0;
+    region.imageSubresource.baseArrayLayer = 0;
+    region.imageSubresource.layerCount = 1;
+    region.imageOffset = {0, 0, 0};
+    region.imageExtent = {width, height, 1};
+
+    vkCmdCopyBufferToImage(context->commandBuffer, stagingBuffer, textureData->image,
+                           VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL,
+                           1, &region);
+
+    // ──────────────────────────────────────────────
+    // 9. Transition image to SHADER_READ_ONLY_OPTIMAL
+    // ──────────────────────────────────────────────
+    barrier.oldLayout = VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL;
+    barrier.newLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
+    barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
+
+    vkCmdPipelineBarrier(context->commandBuffer,
+        VK_PIPELINE_STAGE_TRANSFER_BIT,
+        VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT,
+        0, 0, nullptr, 0, nullptr,
+        1, &barrier);
+
+    // ──────────────────────────────────────────────
+    // 10. End command buffer
+    // ──────────────────────────────────────────────
+    if (vkEndCommandBuffer(context->commandBuffer) != VK_SUCCESS) {
+        throw std::runtime_error("failed to end command buffer!");
+    }
+
+    // ──────────────────────────────────────────────
+    // 11. Create fence for this upload
+    // ──────────────────────────────────────────────
+    VkFenceCreateInfo fenceInfo{};
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = 0;
+
+    if (vkCreateFence(context->device, &fenceInfo, nullptr, &textureData->fence) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create fence!");
+    }
+
+    // ──────────────────────────────────────────────
+    // 12. Submit command buffer with fence
+    // ──────────────────────────────────────────────
+    VkSubmitInfo submitInfo{};
+    submitInfo.sType = VK_STRUCTURE_TYPE_SUBMIT_INFO;
+    submitInfo.commandBufferCount = 1;
+    submitInfo.pCommandBuffers = &context->commandBuffer;
+
+    if (vkQueueSubmit(context->queue, 1, &submitInfo, textureData->fence) != VK_SUCCESS) {
+        vkDestroyFence(context->device, textureData->fence, nullptr);
+        throw std::runtime_error("failed to submit command buffer!");
+    }
+
+    // ──────────────────────────────────────────────
+    // 13. Clean up staging buffer (immediate)
+    // ──────────────────────────────────────────────
+    vkDestroyBuffer(context->device, stagingBuffer, nullptr);
+    vkFreeMemory(context->device, stagingMemory, nullptr);
+
+    // ──────────────────────────────────────────────
+    // 14. Create image view (immediate)
+    // ──────────────────────────────────────────────
     VkImageViewCreateInfo viewInfo{};
     viewInfo.sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO;
-    viewInfo.image = image;
+    viewInfo.image = textureData->image;
     viewInfo.viewType = VK_IMAGE_VIEW_TYPE_2D;
-    viewInfo.format = vkFormat;
+    viewInfo.format = format;
     viewInfo.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    viewInfo.subresourceRange.baseMipLevel = 0;
     viewInfo.subresourceRange.levelCount = 1;
-    viewInfo.subresourceRange.baseArrayLayer = 0;
     viewInfo.subresourceRange.layerCount = 1;
 
-    VkImageView imageView;
-    if (vkCreateImageView(m_device, &viewInfo, nullptr, &imageView) != VK_SUCCESS) {
-        vkDestroyImage(m_device, image, nullptr);
-        vkFreeMemory(m_device, imageMemory, nullptr);
-        throw std::runtime_error("failed to create texture image view!");
+    if (vkCreateImageView(context->device, &viewInfo, nullptr, &textureData->view) != VK_SUCCESS) {
+        vkDestroyFence(context->device, textureData->fence, nullptr);
+        vkDestroyImage(context->device, textureData->image, nullptr);
+        throw std::runtime_error("failed to create image view!");
     }
 
-    // --- 7. Create Sampler ---
     VkSamplerCreateInfo samplerInfo{};
     samplerInfo.sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO;
     samplerInfo.magFilter = VK_FILTER_LINEAR;
@@ -175,30 +280,69 @@ CSJSpTexture CSJVulkanHelper::CreateTexture2D(uint32_t width,
     samplerInfo.maxLod = 1.0f;
     samplerInfo.mipLodBias = 0.0f;
 
-    VkSampler sampler;
-    if (vkCreateSampler(m_device, &samplerInfo, nullptr, &sampler) != VK_SUCCESS) {
-        vkDestroyImageView(m_device, imageView, nullptr);
-        vkDestroyImage(m_device, image, nullptr);
-        vkFreeMemory(m_device, imageMemory, nullptr);
+    if (vkCreateSampler(context->device, &samplerInfo, nullptr, &textureData->sampler) != VK_SUCCESS) {
+        vkDestroyImageView(context->device, textureData->view, nullptr);
+        vkDestroyImage(context->device, textureData->image, nullptr);
+        vkFreeMemory(context->device, textureData->memory, nullptr);
         throw std::runtime_error("failed to create texture sampler!");
     }
 
-    // --- 8. Wrap in TextureData and return ---
-    auto textureData = std::make_unique<TextureData>();
-    textureData->device = m_device;
-    textureData->image = image;
-    textureData->memory = imageMemory;
-    textureData->view = imageView;
-    textureData->sampler = sampler;
     textureData->width = width;
     textureData->height = height;
-    textureData->format = format;
-    textureData->mipLevels = 1;
+    textureData->device = context->device;
 
     return textureData;
 }
 
-CSJSpTexture CSJVulkanHelper::CreateTextureFromFile(const std::string &filePath) {
+void CSJVulkanHelper::WaitForTextureUpload(CSJSpTexture &info) {
+    auto spTexture = std::dynamic_pointer_cast<TextureData>(info);
+
+    if (spTexture->isComplete) {
+        return;
+    }
+
+    vkWaitForFences(spTexture->device, 1, &spTexture->fence, VK_TRUE, UINT64_MAX);
+    vkDestroyFence(spTexture->device, spTexture->fence, nullptr);
+    spTexture->fence = VK_NULL_HANDLE;
+    spTexture->isComplete = true;
+}
+
+bool CSJVulkanHelper::IsTextureUploadComplete(CSJSpTexture &info) {
+    auto spTexture = std::dynamic_pointer_cast<TextureData>(info);
+
+    if (spTexture->isComplete) {
+        return true;
+    }
+
+    VkResult result = vkGetFenceStatus(spTexture->device, spTexture->fence);
+    if (result == VK_SUCCESS) {
+        vkDestroyFence(spTexture->device, spTexture->fence, nullptr);
+        spTexture->fence = VK_NULL_HANDLE;
+        spTexture->isComplete = true;
+        return true;
+    }
+
+    return false;
+}
+
+void CSJVulkanHelper::DestroyTexture(CSJSpTexture &info) {
+    auto spTexture = std::dynamic_pointer_cast<TextureData>(info);
+
+    if (!spTexture->isComplete) {
+        vkWaitForFences(spTexture->device, 1, &spTexture->fence, VK_TRUE, UINT64_MAX);
+        vkDestroyFence(spTexture->device, spTexture->fence, nullptr);
+    }
+
+    if (spTexture->view != VK_NULL_HANDLE) {
+        vkDestroyImageView(spTexture->device, spTexture->view, nullptr);
+    }
+    if (spTexture->image != VK_NULL_HANDLE) {
+        vkDestroyImage(spTexture->device, spTexture->image, nullptr);
+    }
+}
+
+CSJSpTexture CSJVulkanHelper::CreateTextureFromFile(CSJVulkanHelperContext *context,
+                                                         const std::string &filePath) {
     if (filePath.empty()) {
         return nullptr;
     }
@@ -211,19 +355,13 @@ CSJSpTexture CSJVulkanHelper::CreateTextureFromFile(const std::string &filePath)
         throw std::runtime_error("failed to load texture image!");
     }
 
-    CSJSpTexture textureData = CreateTexture2D(texWidth, 
-                                               texHeight, 
-                                               CSJPixelFormat::CSJPixelFormat_R8G8B8A8_SRGB, 
-                                               pixels, 
-                                               imageSize, 
-                                               false);
+    return CreateTexture2D(context,
+                           texWidth,
+                           texHeight,
+                           ToVkFormat(CSJPixelFormat::CSJPixelFormat_R8G8B8A8_SRGB),
+                           pixels,
+                           imageSize);
 
-    return textureData;
-    /**  For now, just a placeholder — you can implement this later
-     * using stb_image or similar library.
-     * Example: load image, then call CreateTexture2D.
-     */
-    //throw std::runtime_error("CreateTextureFromFile not implemented yet.");
 }
 
 void CSJVulkanHelper::UpdateTexture(ICSJTexture *texture, const void *data, size_t dataSize) {
@@ -234,7 +372,7 @@ void CSJVulkanHelper::UpdateTexture(ICSJTexture *texture, const void *data, size
     throw std::runtime_error("UpdateTexture not yet implemented.");
 }
 
-void CSJVulkanHelper::DestroyTexture(ICSJTexture *texture) {
+void CSJVulkanHelper::DestroyTexture(VkDevice device, ICSJTexture *texture) {
     if (!texture) {
         return;
     }
@@ -242,28 +380,32 @@ void CSJVulkanHelper::DestroyTexture(ICSJTexture *texture) {
     TextureData* texData = static_cast<TextureData*>(texture);
 
     // Wait for GPU to finish
-    vkDeviceWaitIdle(m_device);
+    vkDeviceWaitIdle(device);
 
     if (texData->sampler != VK_NULL_HANDLE) {
-        vkDestroySampler(m_device, texData->sampler, nullptr);
+        vkDestroySampler(device, texData->sampler, nullptr);
     }
 
     if (texData->view != VK_NULL_HANDLE) {
-        vkDestroyImageView(m_device, texData->view, nullptr);
+        vkDestroyImageView(device, texData->view, nullptr);
     }
 
     if (texData->image != VK_NULL_HANDLE) {
-        vkDestroyImage(m_device, texData->image, nullptr);
+        vkDestroyImage(device, texData->image, nullptr);
     }
 
     if (texData->memory != VK_NULL_HANDLE) {
-        vkFreeMemory(m_device, texData->memory, nullptr);
+        vkFreeMemory(device, texData->memory, nullptr);
     }
 
     delete texData;
 }
 
-CSJSpBuffer CSJVulkanHelper::CreateBuffer(size_t size, CSJBufferUsage usage, const void *data) {
+CSJSpBuffer CSJVulkanHelper::CreateBuffer(VkDevice device,
+                                          VkPhysicalDevice physical_device,
+                                          size_t size,
+                                          CSJBufferUsage usage,
+                                          const void *data) {
     VkBufferUsageFlags vkUsage = ToVkBufferUsage(usage);
 
     VkBufferCreateInfo bufferInfo{};
@@ -272,19 +414,19 @@ CSJSpBuffer CSJVulkanHelper::CreateBuffer(size_t size, CSJBufferUsage usage, con
     bufferInfo.usage = vkUsage;
 
     VkBuffer buffer;
-    if (vkCreateBuffer(m_device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
+    if (vkCreateBuffer(device, &bufferInfo, nullptr, &buffer) != VK_SUCCESS) {
         throw std::runtime_error("failed to create buffer!");
     }
 
     VkMemoryRequirements memRequirements;
-    vkGetBufferMemoryRequirements(m_device, buffer, &memRequirements);
+    vkGetBufferMemoryRequirements(device, buffer, &memRequirements);
 
     VkMemoryAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
     allocInfo.allocationSize = memRequirements.size;
 
     VkPhysicalDeviceMemoryProperties memProperties;
-    vkGetPhysicalDeviceMemoryProperties(m_physicalDevice, &memProperties);
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &memProperties);
 
     bool foundMemory = false;
     VkMemoryPropertyFlags requiredFlags = VK_MEMORY_PROPERTY_DEVICE_LOCAL_BIT;
@@ -305,24 +447,24 @@ CSJSpBuffer CSJVulkanHelper::CreateBuffer(size_t size, CSJBufferUsage usage, con
     }
 
     if (!foundMemory) {
-        vkDestroyBuffer(m_device, buffer, nullptr);
+        vkDestroyBuffer(device, buffer, nullptr);
         throw std::runtime_error("failed to find suitable memory type for buffer!");
     }
 
     VkDeviceMemory memory;
-    if (vkAllocateMemory(m_device, &allocInfo, nullptr, &memory) != VK_SUCCESS) {
-        vkDestroyBuffer(m_device, buffer, nullptr);
+    if (vkAllocateMemory(device, &allocInfo, nullptr, &memory) != VK_SUCCESS) {
+        vkDestroyBuffer(device, buffer, nullptr);
         throw std::runtime_error("failed to allocate buffer memory!");
     }
 
-    vkBindBufferMemory(m_device, buffer, memory, 0);
+    vkBindBufferMemory(device, buffer, memory, 0);
 
     // If data is provided, upload it
     if (data && size > 0 && usage == CSJBufferUsage::CSJBufferUsage_Staging) {
         void* mappedData;
-        vkMapMemory(m_device, memory, 0, size, 0, &mappedData);
+        vkMapMemory(device, memory, 0, size, 0, &mappedData);
         memcpy(mappedData, data, size);
-        vkUnmapMemory(m_device, memory);
+        vkUnmapMemory(device, memory);
     }
 
     auto bufferData = std::make_unique<BufferData>();
@@ -334,7 +476,11 @@ CSJSpBuffer CSJVulkanHelper::CreateBuffer(size_t size, CSJBufferUsage usage, con
     return bufferData;
 }
 
-void CSJVulkanHelper::UpdateBuffer(ICSJBuffer *buffer, const void *data, size_t dataSize, size_t offset) {
+void CSJVulkanHelper::UpdateBuffer(VkDevice device,
+                                   ICSJBuffer *buffer,
+                                   const void *data,
+                                   size_t dataSize,
+                                   size_t offset) {
     if (!buffer || !data) {
         return;
     }
@@ -342,44 +488,29 @@ void CSJVulkanHelper::UpdateBuffer(ICSJBuffer *buffer, const void *data, size_t 
     BufferData* bufData = static_cast<BufferData*>(buffer);
 
     void* mappedData;
-    vkMapMemory(m_device, bufData->memory, offset, dataSize, 0, &mappedData);
+    vkMapMemory(device, bufData->memory, offset, dataSize, 0, &mappedData);
     memcpy(mappedData, data, dataSize);
-    vkUnmapMemory(m_device, bufData->memory);
+    vkUnmapMemory(device, bufData->memory);
 }
 
-void CSJVulkanHelper::DestroyBuffer(ICSJBuffer *buffer) {
+void CSJVulkanHelper::DestroyBuffer(VkDevice device, ICSJBuffer *buffer) {
     if (!buffer) {
         return;
     }
 
     BufferData* bufData = static_cast<BufferData*>(buffer);
 
-    vkDestroyBuffer(m_device, bufData->buffer, nullptr);
-    vkFreeMemory(m_device, bufData->memory, nullptr);
+    vkDestroyBuffer(device, bufData->buffer, nullptr);
+    vkFreeMemory(device, bufData->memory, nullptr);
 
     delete bufData;
 }
 
-void CSJVulkanHelper::ExecuteImmediate(const std::function<void(void *)> &commands) {
-    VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-    // Execute the user-provided commands
-    if (commands) {
-        commands(reinterpret_cast<void*>(commandBuffer));
-    }
-
-    EndSingleTimeCommands(commandBuffer);
-}
-
-std::string CSJVulkanHelper::GetBackendName() const {
+std::string CSJVulkanHelper::GetBackendName() {
     return "Vulkan";
 }
 
-void *CSJVulkanHelper::GetDeviceHandle() const {
-     return reinterpret_cast<void*>(m_device);
-}
-
-VkFormat CSJVulkanHelper::ToVkFormat(CSJPixelFormat format) const {
+VkFormat CSJVulkanHelper::ToVkFormat(CSJPixelFormat format) {
     switch (format) {
         case CSJPixelFormat::CSJPixelFormat_R8G8B8A8_SRGB:   
             return VK_FORMAT_R8G8B8A8_SRGB;
@@ -414,7 +545,7 @@ VkFormat CSJVulkanHelper::ToVkFormat(CSJPixelFormat format) const {
     }
 }
 
-VkBufferUsageFlags CSJVulkanHelper::ToVkBufferUsage(CSJBufferUsage usage) const {
+VkBufferUsageFlags CSJVulkanHelper::ToVkBufferUsage(CSJBufferUsage usage) {
     VkBufferUsageFlags flags = 0;
     if (usage == CSJBufferUsage::CSJBufferUsage_Vertex) {
         flags |= VK_BUFFER_USAGE_VERTEX_BUFFER_BIT;
@@ -446,15 +577,15 @@ VkBufferUsageFlags CSJVulkanHelper::ToVkBufferUsage(CSJBufferUsage usage) const 
     return flags;
 }
 
-VkCommandBuffer CSJVulkanHelper::BeginSingleTimeCommands() {
+VkCommandBuffer CSJVulkanHelper::BeginSingleTimeCommands(VkDevice device, VkCommandPool commadPool) {
     VkCommandBufferAllocateInfo allocInfo{};
     allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
     allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
-    allocInfo.commandPool = m_commandPool;
+    allocInfo.commandPool = commadPool;
     allocInfo.commandBufferCount = 1;
 
     VkCommandBuffer commandBuffer;
-    vkAllocateCommandBuffers(m_device, &allocInfo, &commandBuffer);
+    vkAllocateCommandBuffers(device, &allocInfo, &commandBuffer);
 
     VkCommandBufferBeginInfo beginInfo{};
     beginInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_BEGIN_INFO;
@@ -465,7 +596,10 @@ VkCommandBuffer CSJVulkanHelper::BeginSingleTimeCommands() {
     return commandBuffer;
 }
 
-void CSJVulkanHelper::EndSingleTimeCommands(VkCommandBuffer commandBuffer) {
+void CSJVulkanHelper::EndSingleTimeCommands(VkDevice device, 
+                                            VkCommandBuffer commandBuffer,
+                                            VkCommandPool commandPool,
+                                            VkQueue queue) {
     vkEndCommandBuffer(commandBuffer);
 
     VkSubmitInfo submitInfo{};
@@ -473,70 +607,20 @@ void CSJVulkanHelper::EndSingleTimeCommands(VkCommandBuffer commandBuffer) {
     submitInfo.commandBufferCount = 1;
     submitInfo.pCommandBuffers = &commandBuffer;
 
-    vkQueueSubmit(m_queue, 1, &submitInfo, VK_NULL_HANDLE);
-    vkQueueWaitIdle(m_queue);
+    vkQueueSubmit(queue, 1, &submitInfo, VK_NULL_HANDLE);
+    vkQueueWaitIdle(queue);
 
-    vkFreeCommandBuffers(m_device, m_commandPool, 1, &commandBuffer);
+    vkFreeCommandBuffers(device, commandPool, 1, &commandBuffer);
 }
 
-void CSJVulkanHelper::TransitionImageLayout(VkImage image, 
-                                            VkFormat format, 
-                                            VkImageLayout oldLayout, 
-                                            VkImageLayout newLayout) {
-    VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
-
-    VkImageMemoryBarrier barrier{};
-    barrier.sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER;
-    barrier.oldLayout = oldLayout;
-    barrier.newLayout = newLayout;
-    barrier.srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED;
-    barrier.image = image;
-    barrier.subresourceRange.aspectMask = VK_IMAGE_ASPECT_COLOR_BIT;
-    barrier.subresourceRange.baseMipLevel = 0;
-    barrier.subresourceRange.levelCount = 1;
-    barrier.subresourceRange.baseArrayLayer = 0;
-    barrier.subresourceRange.layerCount = 1;
-
-    VkPipelineStageFlags sourceStage;
-    VkPipelineStageFlags destinationStage;
-
-    if (oldLayout == VK_IMAGE_LAYOUT_UNDEFINED && 
-            newLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL) {
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        destinationStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-    } else if (oldLayout == VK_IMAGE_LAYOUT_TRANSFER_DST_OPTIMAL && 
-                   newLayout == VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL) {
-        barrier.srcAccessMask = VK_ACCESS_TRANSFER_WRITE_BIT;
-        barrier.dstAccessMask = VK_ACCESS_SHADER_READ_BIT;
-        sourceStage = VK_PIPELINE_STAGE_TRANSFER_BIT;
-        destinationStage = VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT;
-    } else {
-        // Default: just a layout transition
-        barrier.srcAccessMask = 0;
-        barrier.dstAccessMask = 0;
-        sourceStage = VK_PIPELINE_STAGE_TOP_OF_PIPE_BIT;
-        destinationStage = VK_PIPELINE_STAGE_BOTTOM_OF_PIPE_BIT;
-    }
-
-    vkCmdPipelineBarrier(commandBuffer,
-                         sourceStage,
-                         destinationStage,
-                         0,
-                         0, nullptr,
-                         0, nullptr,
-                         1, &barrier);
-
-    EndSingleTimeCommands(commandBuffer);
-}
-
-void CSJVulkanHelper::CopyBufferToImage(VkBuffer buffer, 
-                                        VkImage image, 
+void CSJVulkanHelper::CopyBufferToImage(VkDevice device,
+                                        VkCommandPool commandPool,
+                                        VkQueue queue,
+                                        VkBuffer buffer,
+                                        VkImage image,
                                         uint32_t width, 
                                         uint32_t height) {
-    VkCommandBuffer commandBuffer = BeginSingleTimeCommands();
+    VkCommandBuffer commandBuffer = BeginSingleTimeCommands(device, commandPool);
 
     VkBufferImageCopy region{};
     region.bufferOffset = 0;
@@ -556,7 +640,7 @@ void CSJVulkanHelper::CopyBufferToImage(VkBuffer buffer,
                            1,
                            &region);
 
-    EndSingleTimeCommands(commandBuffer);
+    EndSingleTimeCommands(device, commandBuffer, commandPool, queue);
 }
 
 }

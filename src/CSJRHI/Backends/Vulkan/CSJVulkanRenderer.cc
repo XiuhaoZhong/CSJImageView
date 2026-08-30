@@ -56,10 +56,6 @@ bool CSJVulkanRenderer::Init(void *windowHandle, int width, int height) {
 void CSJVulkanRenderer::Shutdown() {
     std::cout << "CSJVulkan Renderer shutdown." << std::endl;
 
-    if (m_pHelper) {
-        m_pHelper = nullptr;
-    }
-
     cleanup();
 }
 
@@ -119,7 +115,6 @@ void CSJVulkanRenderer::initVulkan() {
     createSurface();
     pickPhysicalDevice();
     createLogicalDevice();
-    createVulkanHelper();
     createSwapChain();
     createImageViews();
     createRenderPass();
@@ -127,6 +122,8 @@ void CSJVulkanRenderer::initVulkan() {
     createCommandPool();
     createCommandBuffer();
     // createCommonDescriptorPool();
+
+    createHelperResources();
     
     if (m_renderType == CSJRenderType::Renderable) {
         createDescriptorPoolForRenderables();
@@ -187,6 +184,7 @@ void CSJVulkanRenderer::cleanup() {
     }
 
     destroyOffscreenResources();
+    destroyHelperResources();
 
     if (m_offscreenSampler) {
         vkDestroySampler(m_device, m_offscreenSampler, nullptr);
@@ -434,10 +432,6 @@ void CSJVulkanRenderer::createLogicalDevice() {
 
     vkGetDeviceQueue(m_device, indices.m_graphics_family.value(), 0, &m_graphics_queue);
     vkGetDeviceQueue(m_device, indices.m_present_family.value(), 0, &m_present_queue);
-}
-
-void CSJVulkanRenderer::createVulkanHelper() {
-    m_pHelper = std::make_shared<CSJVulkanHelper>(m_device, m_physical_device, m_graphics_queue);
 }
 
 void CSJVulkanRenderer::createSurface() {
@@ -1247,6 +1241,41 @@ void CSJVulkanRenderer::TransitionOffscreenToShaderReadOnly(VkCommandBuffer cmd)
     );
 
     m_offscreenLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+}
+
+void CSJVulkanRenderer::createHelperResources() {
+    QueueFamilyIndices indices = findQueueFamilies(m_physical_device);
+
+    // Create a dedicated command pool for toolkit operations
+    VkCommandPoolCreateInfo poolInfo{};
+    poolInfo.sType = VK_STRUCTURE_TYPE_COMMAND_POOL_CREATE_INFO;
+    poolInfo.flags = VK_COMMAND_POOL_CREATE_RESET_COMMAND_BUFFER_BIT;
+    poolInfo.queueFamilyIndex = indices.m_graphics_family.value();  // Use graphics queue
+
+    if (vkCreateCommandPool(m_device, &poolInfo, nullptr, &m_helper_command_pool) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create toolkit command pool!");
+    }
+
+    VkCommandBufferAllocateInfo allocInfo{};
+    allocInfo.sType = VK_STRUCTURE_TYPE_COMMAND_BUFFER_ALLOCATE_INFO;
+    allocInfo.commandPool = m_helper_command_pool;
+    allocInfo.level = VK_COMMAND_BUFFER_LEVEL_PRIMARY;
+    allocInfo.commandBufferCount = 1;
+
+    if (vkAllocateCommandBuffers(m_device, &allocInfo, &m_helper_command_buffer) != VK_SUCCESS) {
+        std::cerr << "[VulkanRenderer] Failed to allocate upload command buffer!" << std::endl;
+        vkDestroyCommandPool(m_device, m_helper_command_pool, nullptr);
+        m_helper_command_pool = VK_NULL_HANDLE;
+    }
+}
+
+void CSJVulkanRenderer::destroyHelperResources() {
+     if (m_helper_command_pool != VK_NULL_HANDLE) {
+        vkDestroyCommandPool(m_device, m_helper_command_pool, nullptr);
+        m_helper_command_pool = VK_NULL_HANDLE;
+        m_helper_command_pool = VK_NULL_HANDLE;  // Already freed with the pool
+        std::cout << "[VulkanRenderer] Upload command pool destroyed." << std::endl;
+    }
 }
 
 } // namespace csjrhi
