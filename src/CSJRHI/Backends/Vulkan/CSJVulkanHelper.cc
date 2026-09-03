@@ -241,8 +241,11 @@ CSJSpTexture CSJVulkanHelper::CreateTexture2D(CSJVulkanHelperContext *context,
     // ──────────────────────────────────────────────
     // 13. Clean up staging buffer (immediate)
     // ──────────────────────────────────────────────
-    vkDestroyBuffer(context->device, stagingBuffer, nullptr);
-    vkFreeMemory(context->device, stagingMemory, nullptr);
+    // vkDestroyBuffer(context->device, stagingBuffer, nullptr);
+    // vkFreeMemory(context->device, stagingMemory, nullptr);
+
+    textureData->stagingBuffer = stagingBuffer;
+    textureData->stagingMemory = stagingMemory;
 
     // ──────────────────────────────────────────────
     // 14. Create image view (immediate)
@@ -303,6 +306,10 @@ void CSJVulkanHelper::WaitForTextureUpload(CSJSpTexture &info) {
 
     vkWaitForFences(spTexture->device, 1, &spTexture->fence, VK_TRUE, UINT64_MAX);
     vkDestroyFence(spTexture->device, spTexture->fence, nullptr);
+
+    vkDestroyBuffer(spTexture->device,  spTexture->stagingBuffer, nullptr);
+    vkFreeMemory(spTexture->device, spTexture->stagingMemory, nullptr);
+
     spTexture->fence = VK_NULL_HANDLE;
     spTexture->isComplete = true;
 }
