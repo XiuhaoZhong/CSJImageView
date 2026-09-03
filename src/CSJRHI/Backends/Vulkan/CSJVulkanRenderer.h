@@ -82,6 +82,8 @@ public:
         return m_render_pass;
     }
 
+    VkRenderPass getPostprocessRenderPass() const;
+
     VkCommandPool getHelperCommandPool() const {
         return m_helper_command_pool;
     }
@@ -96,6 +98,10 @@ public:
 
     VkCommandBuffer getCommandBuffer() const {
         return m_command_buffers[m_current_frame];
+    }
+
+    VkCommandPool getCommandPool() const {
+        return m_command_pool;
     }
 
     VkDescriptorPool getDescriptorPool() const {
@@ -177,15 +183,6 @@ protected:
 
     void createDescriptorPoolForRenderables();
 
-    void createOffscreenSampler();
-    void createOffscreenResources();
-    void destroyOffscreenResources();
-
-    void reCreateOffscreenResources();
-
-    void TransitionOffscreenToColorAttachment(VkCommandBuffer cmd);
-    void TransitionOffscreenToShaderReadOnly(VkCommandBuffer cmd);
-
     void createHelperResources();
     void destroyHelperResources();
 
@@ -218,12 +215,6 @@ private:
 
     VkCommandPool         m_helper_command_pool;
     VkCommandBuffer       m_helper_command_buffer;
-
-    VkImage         m_offscreenImage;
-    VkDeviceMemory  m_offscreenMemory;
-    VkImageView     m_offscreenImageView;
-    VkFramebuffer   m_offscreenFramebuffer;
-    VkSampler       m_offscreenSampler;
 
     /* This descriptor pool is for image renderer and yuv renderer. */
     VkDescriptorPool m_descripotrPoolForRenderables = VK_NULL_HANDLE;

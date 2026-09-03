@@ -83,14 +83,12 @@ bool CSJImageRenderable::init(void *rendererHanle) {
     m_device = renderer->getDevice();
 
     createDescriptorSetLayout();
-    
     createPipeline();
     createUniformBuffers();
     createImageTexture();
     createDescriptorSets();
     createVertexBuffer();
     createIndexBuffer();
-   
     
     return true;
 }
@@ -112,7 +110,6 @@ void CSJImageRenderable::render(void *commandHandle, float timeStamp) {
 
     auto *renderer = static_cast<CSJVulkanRenderer *>(m_render_handler);
     VkExtent2D curExtent = renderer->getSwapchainExtent();
-
     VkCommandBuffer commandBuffer = renderer->getCommandBuffer();
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_graphics_pipeline);
@@ -150,9 +147,10 @@ void CSJImageRenderable::onResize(uint32_t width, uint32_t height) {
 }
 
 void CSJImageRenderable::unInit() {
-
+    std::cout << "CSJImageRenderable::unInit()" << std::endl;
     vkDestroyPipeline(m_device, m_graphics_pipeline, nullptr);
     vkDestroyPipelineLayout(m_device, m_pipeline_layout, nullptr);
+    vkDestroyDescriptorSetLayout(m_device, m_descriptorset_layout, nullptr);
 
     vkDestroyBuffer(m_device, m_vertex_buffer, nullptr);
     vkFreeMemory(m_device, m_vertex_buffer_memory, nullptr);
@@ -317,7 +315,7 @@ void CSJImageRenderable::createPipeline() {
     pipelineInfo.pColorBlendState    = &colorBlending;
     pipelineInfo.pDynamicState       = &dynamicState;
     pipelineInfo.layout              = m_pipeline_layout;
-    pipelineInfo.renderPass          = renderer->getRenderPass();
+    pipelineInfo.renderPass          = renderer->getPostprocessRenderPass();//renderer->getRenderPass();
     pipelineInfo.subpass             = 0;
     pipelineInfo.basePipelineHandle  = VK_NULL_HANDLE;
 
@@ -337,11 +335,11 @@ void CSJImageRenderable::createImageTexture() {
     std::string imagePath("E:\\technology\\Personal_Projects\\CSJImageView\\resources\\originImages\\slamDumk_images\\cross_street.jpeg");
 
     CSJVulkanHelperContext context;
-    context.device = renderer->getDevice();
+    context.device          = renderer->getDevice();
     context.physical_device = renderer->getPhysicalDevice();
-    context.commandPool = renderer->getHelperCommandPool();
-    context.commandBuffer = renderer->getHelperCommandBuffer();
-    context.queue = renderer->getGraphicsQueue();
+    context.commandPool     = renderer->getHelperCommandPool();
+    context.commandBuffer   = renderer->getHelperCommandBuffer();
+    context.queue           = renderer->getGraphicsQueue();
 
     m_pTexData = CSJVulkanHelper::CreateTextureFromFile(&context, imagePath);
     CSJVulkanHelper::WaitForTextureUpload(m_pTexData);
