@@ -107,13 +107,29 @@ void CSJPostProcessRenderable::unInit() {
         vkDestroyDescriptorSetLayout(m_device, m_postProcessDescriptorSetLayout, nullptr);
     }
 
-    vkDestroyFramebuffer(m_device, m_offscreenFramebuffer, nullptr);
-    vkDestroyImageView(m_device, m_offscreenImageView, nullptr);
-    vkFreeMemory(m_device, m_offscreenMemory, nullptr);
-    vkDestroyImage(m_device, m_offscreenImage, nullptr);
-    vkDestroySampler(m_device, m_sampler, nullptr);
-    
-    vkDestroyRenderPass(m_device, m_offscreenRenderPass, nullptr);
+    if (m_offscreenFramebuffer) {
+        vkDestroyFramebuffer(m_device, m_offscreenFramebuffer, nullptr);
+    }
+
+    if (m_offscreenImageView) {
+        vkDestroyImageView(m_device, m_offscreenImageView, nullptr);
+    }
+
+    if (m_offscreenMemory) {
+        vkFreeMemory(m_device, m_offscreenMemory, nullptr);
+    }
+
+    if (m_offscreenImage) {
+        vkDestroyImage(m_device, m_offscreenImage, nullptr);
+    }
+
+    if (m_sampler) {
+        vkDestroySampler(m_device, m_sampler, nullptr);
+    }
+
+    if (m_offscreenRenderPass) {
+        vkDestroyRenderPass(m_device, m_offscreenRenderPass, nullptr);
+    }
 }
 
 void CSJPostProcessRenderable::setInputTexture(VkImageView imageView, VkSampler sampler) {
