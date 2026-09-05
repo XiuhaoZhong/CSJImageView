@@ -148,19 +148,43 @@ void CSJImageRenderable::onResize(uint32_t width, uint32_t height) {
 
 void CSJImageRenderable::unInit() {
     std::cout << "CSJImageRenderable::unInit()" << std::endl;
-    vkDestroyPipeline(m_device, m_graphics_pipeline, nullptr);
-    vkDestroyPipelineLayout(m_device, m_pipeline_layout, nullptr);
-    vkDestroyDescriptorSetLayout(m_device, m_descriptorset_layout, nullptr);
 
-    vkDestroyBuffer(m_device, m_vertex_buffer, nullptr);
-    vkFreeMemory(m_device, m_vertex_buffer_memory, nullptr);
+    if (m_graphics_pipeline) {
+        vkDestroyPipeline(m_device, m_graphics_pipeline, nullptr);
+    }
 
-    vkDestroyBuffer(m_device, m_index_buffer, nullptr);
-    vkFreeMemory(m_device, m_index_buffer_memory, nullptr);
+    if (m_pipeline_layout) {
+        vkDestroyPipelineLayout(m_device, m_pipeline_layout, nullptr);
+    }
+
+    if (m_descriptorset_layout) {
+        vkDestroyDescriptorSetLayout(m_device, m_descriptorset_layout, nullptr);
+    }
+
+    if (m_vertex_buffer) {
+        vkDestroyBuffer(m_device, m_vertex_buffer, nullptr);
+    }
+
+    if (m_vertex_buffer_memory) {
+        vkFreeMemory(m_device, m_vertex_buffer_memory, nullptr);
+    }
+
+    if (m_index_buffer) {
+        vkDestroyBuffer(m_device, m_index_buffer, nullptr);
+    }
+
+    if (m_index_buffer_memory) {
+        vkFreeMemory(m_device, m_index_buffer_memory, nullptr);
+    }
 
     for (size_t i = 0 ; i < max_frame_in_flight; i++) {
-        vkDestroyBuffer(m_device, m_uniform_buffers[i], nullptr);
-        vkFreeMemory(m_device, m_uniform_buffer_memories[i], nullptr);
+        if (m_uniform_buffers[i]) {
+            vkDestroyBuffer(m_device, m_uniform_buffers[i], nullptr);
+        }
+
+        if (m_uniform_buffer_memories[i]) {
+            vkFreeMemory(m_device, m_uniform_buffer_memories[i], nullptr);
+        }
     }
 
     m_pTexData.reset();
