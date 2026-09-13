@@ -408,6 +408,45 @@ void CSJVulkanHelper::DestroyTexture(VkDevice device, ICSJTexture *texture) {
     delete texData;
 }
 
+bool CSJVulkanHelper::createUniformBuffer(VkDevice device,
+                                          VkPhysicalDevice physical_device,
+                                          uint64_t buffer_size,
+                                          VkMemoryPropertyFlags memory_flags,
+                                          VkBuffer &buffer,
+                                          VkDeviceMemory &buffer_memory,
+                                          void **memory_mapped) {
+    VkBufferCreateInfo info{};
+    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
+    info.size  = buffer_size;
+    info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+
+    vkCreateBuffer(device, &info, nullptr, &buffer);
+
+    VkMemoryRequirements req;
+    vkGetBufferMemoryRequirements(device, buffer, &req);
+
+    VkMemoryAllocateInfo alloc{};
+    alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
+    alloc.allocationSize = req.size;
+
+    VkPhysicalDeviceMemoryProperties props;
+    vkGetPhysicalDeviceMemoryProperties(physical_device, &props);
+    for (uint32_t i = 0; i < props.memoryTypeCount; ++i) {
+        if (req.memoryTypeBits & (1 << i)) {
+            if (props.memoryTypes[i].propertyFlags & memory_flags) {
+                alloc.memoryTypeIndex = i;
+                break;
+            }
+        }
+    }
+
+    vkAllocateMemory(device, &alloc, nullptr, &buffer_memory);
+    vkBindBufferMemory(device, buffer, buffer_memory, 0);
+    vkMapMemory(device, buffer_memory, 0, buffer_size, 0, memory_mapped);
+
+    return true;
+}
+
 CSJSpBuffer CSJVulkanHelper::CreateBuffer(VkDevice device,
                                           VkPhysicalDevice physical_device,
                                           size_t size,

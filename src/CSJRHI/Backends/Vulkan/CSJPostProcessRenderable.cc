@@ -34,11 +34,16 @@ bool CSJPostProcessRenderable::init(void *rendererHanle) {
     createRenderPass();
     createOffscreenFramebuffer();
     createSampler();
+    createEffectUniformBuffers();
     createDescriptorSetLayout();
     createPipeline();
     createDescriptorSet();
 
     setInputTexture(m_offscreenImageView, m_sampler);
+
+    m_effectParam.effectType = 0;
+    m_effectParam.exposure = 1.0;
+    m_effectParam.intensity = 1.0;
 
     return true;
 }
@@ -48,10 +53,15 @@ bool CSJPostProcessRenderable::isReady() const {
 }
 
 void CSJPostProcessRenderable::updateScene() {
-
+    std::lock_guard<std::mutex> guard_lock(m_effectMtx);
+    memcpy(m_effectBuffers[m_current_index].buffer_mapped,
+           &m_effectParam,
+           sizeof(CSJEffectParams));
 }
 
 void CSJPostProcessRenderable::render(void *commandHandle, float timeStamp) {
+    updateDescriptorSet();
+
     auto *renderer = static_cast<CSJVulkanRenderer *>(m_render_handler);
     VkCommandBuffer commandBuffer = renderer->getCommandBuffer();
 
@@ -62,14 +72,16 @@ void CSJPostProcessRenderable::render(void *commandHandle, float timeStamp) {
     vkCmdBindDescriptorSets(commandBuffer,
                             VK_PIPELINE_BIND_POINT_GRAPHICS,
                             m_postProcessPipelineLayout,
-                            0,                              // first set index
-                            1,                              // set count
-                            &m_postProcessDescriptorSet,    // the descriptor set
-                            0,                              // dynamic offset count
-                            nullptr);                       // dynamic offsets
+                            0,                                 // first set index
+                            1,                                 // set count
+                            &m_descriptorSet[m_current_index], // the descriptor
+                            0,                                 // dynamic offset count
+                            nullptr);                          // dynamic offsets
 
     // 3. Draw a full-screen quad (6 vertices = 2 triangles)
     vkCmdDraw(commandBuffer, 6, 1, 0, 0);
+
+    m_current_index = (m_current_index + 1) % post_process_max_frames;
 }
 
 void CSJPostProcessRenderable::onResize(uint32_t width, uint32_t height) {
@@ -130,26 +142,25 @@ void CSJPostProcessRenderable::unInit() {
     if (m_offscreenRenderPass) {
         vkDestroyRenderPass(m_device, m_offscreenRenderPass, nullptr);
     }
+
+    destroyEffectUniformBuffers();
+}
+
+void CSJPostProcessRenderable::setEffectParam(CSJEffectParams effectParam) {
+    std::lock_guard<std::mutex> guard_lock(m_effectMtx);
+    // m_effectParam = effectParam;
+
+    m_effectParam = effectParam;
+
+    std::cout << "m_effectParam: " << "(" << m_effectParam.effectType 
+                                   << ", " << m_effectParam.exposure 
+                                   << ", " << m_effectParam.intensity
+                                   << ")" << std::endl;
 }
 
 void CSJPostProcessRenderable::setInputTexture(VkImageView imageView, VkSampler sampler) {
     m_inputImageView = imageView;
     m_sampler = sampler;
-
-     VkDescriptorImageInfo imageInfo{};
-    imageInfo.imageView   = m_inputImageView;
-    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
-    imageInfo.sampler     = m_sampler;
-
-    VkWriteDescriptorSet write{};
-    write.sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
-    write.dstSet          = m_postProcessDescriptorSet;
-    write.dstBinding      = 0;
-    write.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    write.descriptorCount = 1;
-    write.pImageInfo      = &imageInfo;
-
-    vkUpdateDescriptorSets(m_device, 1, &write, 0, nullptr);
 }
 
 void CSJPostProcessRenderable::createPipeline() {
@@ -420,6 +431,38 @@ void CSJPostProcessRenderable::createOffscreenFramebuffer() {
     }
 }
 
+void CSJPostProcessRenderable::createEffectUniformBuffers() {
+    VkMemoryPropertyFlags requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
+    uint64_t buffer_size = static_cast<uint64_t>(sizeof(EffectUniform));
+
+    for (auto& effect_buffer : m_effectBuffers) {
+        bool res = CSJVulkanHelper::createUniformBuffer(m_device,
+                                                        m_physical_device,
+                                                        buffer_size,
+                                                        requiredFlags,
+                                                        effect_buffer.buffer,
+                                                        effect_buffer.memory,
+                                                        &effect_buffer.buffer_mapped);
+        if (!res) {
+            std::runtime_error("Create effect uniform buffer failed!");
+        }
+    }
+}
+
+void CSJPostProcessRenderable::destroyEffectUniformBuffers() {
+    for (auto& effect_buffer : m_effectBuffers) {
+        if (effect_buffer.buffer) {
+            vkDestroyBuffer(m_device, effect_buffer.buffer, nullptr);
+        }
+
+        if (effect_buffer.memory) {
+            vkFreeMemory(m_device, effect_buffer.memory, nullptr);
+            effect_buffer.buffer_mapped = nullptr;
+        }
+    }
+}
+
 void CSJPostProcessRenderable::createRenderPass() {
     VkAttachmentDescription colorAttachment{};
     colorAttachment.format        = VK_FORMAT_R16G16B16A16_SFLOAT;//m_format;
@@ -465,16 +508,22 @@ void CSJPostProcessRenderable::createSampler() {
 }
 
 void CSJPostProcessRenderable::createDescriptorSetLayout() {
-    VkDescriptorSetLayoutBinding binding{};
-    binding.binding         = 0;
-    binding.descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    binding.descriptorCount = 1;
-    binding.stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+    std::array<VkDescriptorSetLayoutBinding,2> bindings{};
+    bindings[0].binding         = 0;
+    bindings[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    bindings[0].descriptorCount = 1;
+    bindings[0].stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
+
+    // Uniform buffer
+    bindings[1].binding         = 1;
+    bindings[1].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    bindings[1].descriptorCount = 1;
+    bindings[1].stageFlags      = VK_SHADER_STAGE_FRAGMENT_BIT;
 
     VkDescriptorSetLayoutCreateInfo layoutInfo{};
     layoutInfo.sType        = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_LAYOUT_CREATE_INFO;
-    layoutInfo.bindingCount = 1;
-    layoutInfo.pBindings    = &binding;
+    layoutInfo.bindingCount = static_cast<uint32_t>(bindings.size());
+    layoutInfo.pBindings    = bindings.data();
 
     vkCreateDescriptorSetLayout(m_device, &layoutInfo, nullptr, &m_postProcessDescriptorSetLayout);
 }
@@ -483,10 +532,47 @@ void CSJPostProcessRenderable::createDescriptorSet() {
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
     allocInfo.descriptorPool     = m_descriptor_pool;
-    allocInfo.descriptorSetCount = 1;
+    allocInfo.descriptorSetCount = 2;
     allocInfo.pSetLayouts        = &m_postProcessDescriptorSetLayout;
 
-    vkAllocateDescriptorSets(m_device, &allocInfo, &m_postProcessDescriptorSet);
+    for (auto &descriptorSet : m_descriptorSet) {
+        VkDescriptorSetAllocateInfo allocInfo{};
+        allocInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
+        allocInfo.descriptorPool     = m_descriptor_pool;
+        allocInfo.descriptorSetCount = 1;
+        allocInfo.pSetLayouts        = &m_postProcessDescriptorSetLayout;
+
+        vkAllocateDescriptorSets(m_device, &allocInfo, &descriptorSet);
+    }
+}
+
+void CSJPostProcessRenderable::updateDescriptorSet() {
+    VkDescriptorImageInfo imageInfo{};
+    imageInfo.imageView   = m_inputImageView;
+    imageInfo.imageLayout = VK_IMAGE_LAYOUT_SHADER_READ_ONLY_OPTIMAL;
+    imageInfo.sampler     = m_sampler;
+
+    VkDescriptorBufferInfo bufferInfo{};
+    bufferInfo.buffer = m_effectBuffers[m_current_index].buffer;
+    bufferInfo.offset = 0;
+    bufferInfo.range = sizeof(EffectUniform);
+
+    std::array<VkWriteDescriptorSet, 2> writes{};
+    writes[0].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[0].dstSet          = m_descriptorSet[m_current_index];
+    writes[0].dstBinding      = 0;
+    writes[0].descriptorType  = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
+    writes[0].descriptorCount = 1;
+    writes[0].pImageInfo      = &imageInfo;
+
+    writes[1].sType           = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET;
+    writes[1].dstSet          = m_descriptorSet[m_current_index];
+    writes[1].dstBinding      = 1;
+    writes[1].descriptorCount = 1;
+    writes[1].descriptorType  = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
+    writes[1].pBufferInfo     = &bufferInfo;
+
+    vkUpdateDescriptorSets(m_device, 2, writes.data(), 0, nullptr);
 }
 
 } // namespace csjrhi;

@@ -385,34 +385,20 @@ void CSJYUVRenderable::createYUVSampler() {
 void CSJYUVRenderable::createYUVUniformBuffer() {
     auto *renderer = static_cast<CSJVulkanRenderer *>(m_render_handler);
 
-    VkBufferCreateInfo info{};
-    info.sType = VK_STRUCTURE_TYPE_BUFFER_CREATE_INFO;
-    info.size  = sizeof(YUVUniforms);
-    info.usage = VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT;
+    VkMemoryPropertyFlags requiredFlags = VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT |
+                                            VK_MEMORY_PROPERTY_HOST_COHERENT_BIT;
 
-    vkCreateBuffer(m_device, &info, nullptr, &m_yuvUniformBuffer);
+    bool res = CSJVulkanHelper::createUniformBuffer(m_device,
+                                                    renderer->getPhysicalDevice(),
+                                                    sizeof(YUVUniforms),
+                                                    requiredFlags,
+                                                    m_yuvUniformBuffer,
+                                                    m_yuvUniformBufferMemory,
+                                                    &m_yuvUniformBufferMapped);
 
-    VkMemoryRequirements req;
-    vkGetBufferMemoryRequirements(m_device, m_yuvUniformBuffer, &req);
-
-    VkMemoryAllocateInfo alloc{};
-    alloc.sType = VK_STRUCTURE_TYPE_MEMORY_ALLOCATE_INFO;
-    alloc.allocationSize = req.size;
-
-    VkPhysicalDeviceMemoryProperties props;
-    vkGetPhysicalDeviceMemoryProperties(renderer->getPhysicalDevice(), &props);
-    for (uint32_t i = 0; i < props.memoryTypeCount; ++i) {
-        if (req.memoryTypeBits & (1 << i)) {
-            if (props.memoryTypes[i].propertyFlags & VK_MEMORY_PROPERTY_HOST_VISIBLE_BIT) {
-                alloc.memoryTypeIndex = i;
-                break;
-            }
-        }
+    if (!res) {
+        std::runtime_error("create yuv uniform buffer failed!");
     }
-
-    vkAllocateMemory(m_device, &alloc, nullptr, &m_yuvUniformBufferMemory);
-    vkBindBufferMemory(m_device, m_yuvUniformBuffer, m_yuvUniformBufferMemory, 0);
-    vkMapMemory(m_device, m_yuvUniformBufferMemory, 0, sizeof(YUVUniforms), 0, &m_yuvUniformBufferMapped);
 }
 
 void CSJYUVRenderable::createYUVComputeDescriptorSetLayout() {
@@ -502,7 +488,7 @@ void CSJYUVRenderable::createYUVComputeDescriptorSet() {
     // 1. Allocate descriptor set
     VkDescriptorSetAllocateInfo allocInfo{};
     allocInfo.sType              = VK_STRUCTURE_TYPE_DESCRIPTOR_SET_ALLOCATE_INFO;
-    allocInfo.descriptorPool     = renderer->getDescriptorPool();// m_descripotrPoolForRenderables;
+    allocInfo.descriptorPool     = renderer->getDescriptorPool();
     allocInfo.descriptorSetCount = 1;
     allocInfo.pSetLayouts        = &m_yuvComputeDescriptorSetLayout;
 

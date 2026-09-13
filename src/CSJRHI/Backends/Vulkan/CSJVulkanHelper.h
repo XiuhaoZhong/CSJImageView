@@ -48,6 +48,14 @@ public:
 
     static void DestroyTexture(VkDevice device, ICSJTexture* texture);
 
+    static bool createUniformBuffer(VkDevice device,
+                                    VkPhysicalDevice physical_device,
+                                    uint64_t buffer_size,
+                                    VkMemoryPropertyFlags flags,
+                                    VkBuffer &buffer,
+                                    VkDeviceMemory &buffer_memory,
+                                    void **memory_mapped);
+
     // --- Buffer ---
     static CSJSpBuffer CreateBuffer(VkDevice device, 
                                     VkPhysicalDevice physical_device,
