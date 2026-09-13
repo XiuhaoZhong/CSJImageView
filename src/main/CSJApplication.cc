@@ -24,7 +24,11 @@ using namespace csjrhi;
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
 
+CSJApplication *g_app = nullptr;
+
 void CSJApplication::run() {
+    g_app = this;
+
     initWindow();
     initRenderer();
     mainLoop();
@@ -36,6 +40,26 @@ void CSJApplication::resizeFramebuffer(int width, int height) {
         glfwGetFramebufferSize(m_pWindow, &width, &height);
         glfwWaitEvents();
     }
+}
+
+void CSJApplication::changeEffectType() {
+    m_iEffectType++;
+
+    setEffectParam();
+
+    m_iEffectType = m_iEffectType % static_cast<int>(CSJPostProcessEffect::Effect_Max);
+}
+
+void CSJApplication::changeExposure(float delta) {
+    m_exposure += delta;
+
+    setEffectParam();
+}
+
+void CSJApplication::changeIntensity(float delta) {
+    m_intensity += delta;
+
+    setEffectParam();
 }
 
 void CSJApplication::framebufferResiceCallback(GLFWwindow *window, int width, int height) {
@@ -87,8 +111,10 @@ void CSJApplication::initWindow() {
     glfwWindowHint(GLFW_CLIENT_API, GLFW_NO_API);
 
     m_pWindow = glfwCreateWindow(WIDTH, HEIGHT, "Vulkan", nullptr, nullptr);
-    glfwSetWindowUserPointer(m_pWindow, this);
+    glfwSetKeyCallback(m_pWindow, keyCallback);
     glfwSetFramebufferSizeCallback(m_pWindow, framebufferResiceCallback);
+
+    glfwSetWindowUserPointer(m_pWindow, this);
 
 #ifndef NDEBUG
     m_enable_validation_Layers = true;
@@ -161,4 +187,48 @@ std::vector<char> CSJApplication::readFile(const std::string &filename) {
     file.close();
 
     return buffer;
+}
+
+void CSJApplication::keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods) {
+    if (action != GLFW_PRESS) {
+        return ;
+    }
+
+    if (!g_app) {
+        return ;
+    }
+
+    if (key == GLFW_KEY_G && (mods & GLFW_MOD_CONTROL)) {
+        g_app->changeEffectType();
+    }
+
+    if (key == GLFW_KEY_UP && (mods & GLFW_MOD_CONTROL)) {
+        g_app->changeExposure(0.1f);
+    }
+
+    if (key == GLFW_KEY_DOWN && (mods & GLFW_MOD_CONTROL)) {
+        g_app->changeExposure(-0.1f);
+    }
+
+    if (key == GLFW_KEY_RIGHT && (mods & GLFW_MOD_CONTROL)) {
+        g_app->changeIntensity(0.1f);
+    }
+
+    if (key == GLFW_KEY_LEFT && (mods & GLFW_MOD_CONTROL)) {
+        g_app->changeIntensity(-0.1f);
+    }
+}
+
+void CSJApplication::setEffectParam() {
+    if (!m_pRenderer) {
+        return ;
+    }
+
+    CSJEffectParams param{};
+
+    param.effectType = m_iEffectType;
+    param.exposure = m_exposure;
+    param.intensity = m_intensity;
+
+    m_pRenderer->setPostProcessEffect(param);
 }

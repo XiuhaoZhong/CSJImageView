@@ -12,7 +12,6 @@
 #include <vulkan/vulkan.h>
 
 #include "CSJVulkanHelper.h"
-#include "ICSJRenderable.h"
 
 namespace csjrhi {
 
@@ -57,6 +56,7 @@ public:
     uint32_t CreateTexture(int width, int height, int format, const void* data) override;
     void DestroyTexture(uint32_t textureId) override;
     void UpdateTexture(uint32_t textureId, const void* data) override;
+    void setPostProcessEffect(CSJEffectParams effect) override;
     std::string GetBackendName() const override;
     float GetLastFrameTime() const override;
     const CSJRendererCapabilities& GetCapabilities() const override;

@@ -30,6 +30,12 @@ public:
 
     void resizeFramebuffer(int width, int height);
 
+    void changeEffectType();
+
+    void changeExposure(float delta);
+
+    void changeIntensity(float delta);
+
     static void framebufferResiceCallback(GLFWwindow *window, int width, int height);
 
 protected:
@@ -45,6 +51,10 @@ protected:
     void recreateSwapChain();
 
     std::vector<char> readFile(const std::string& filename);
+
+    static void keyCallback(GLFWwindow *window, int key, int scancode, int action, int mods);
+
+    void setEffectParam();
 private:
     GLFWwindow       *m_pWindow;
     bool              m_bFrameBufferResize = false;
@@ -53,6 +63,10 @@ private:
 
     bool m_enable_validation_Layers{ true };
     bool m_enable_debug_utils_label{ true };
+
+    int m_iEffectType = 0;
+    float m_exposure = 1.0;
+    float m_intensity = 1.0;
 
 };
 

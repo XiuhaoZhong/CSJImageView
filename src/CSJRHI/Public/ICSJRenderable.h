@@ -4,6 +4,27 @@
 #include <memory>
 
 namespace csjrhi {
+// ──────────────────────────────────────────────
+// Effect Types
+// ──────────────────────────────────────────────
+enum class CSJPostProcessEffect {
+    None = 0,           // Pass‑through
+    Tonemap,        // Reinhard tonemapping + gamma
+    Grayscale,      // Convert to grayscale
+    Invert,         // Invert colors
+    Sepia,          // Sepia tone
+    Blur,           // Simple blur (placeholder)
+    Bloom,          // Bloom (placeholder)
+    Effect_Max,
+};
+
+struct CSJEffectParams {
+    int effectType;   // 0 = None, 1 = Tonemap, 2 = Grayscale, 3 = Invert, 4 = Sepia
+    float intensity;  // Optional: for future effects
+    float exposure;   // Optional: for tonemapping
+    float padding;    // used to align to 16-byte.
+};
+
 
 /**
  * @brief This interface is for the objects that manager their own rendering resouce and 

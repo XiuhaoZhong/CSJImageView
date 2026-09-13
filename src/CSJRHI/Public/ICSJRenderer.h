@@ -3,6 +3,8 @@
 #include <cstdint>
 #include <string>
 
+#include "ICSJRenderable.h"
+
 namespace csjrhi {
 
 struct CSJRendererCapabilities;
@@ -65,6 +67,13 @@ public:
      * @param data Pointer to new pixel data.
      */ 
     virtual void UpdateTexture(uint32_t textureId, const void* data) = 0;
+
+    /**
+     * @brief Set the post process effect parameter.
+     *
+     * @param effectParam post process effect parameter.
+     */
+    virtual void setPostProcessEffect(CSJEffectParams effectParam) = 0;
 
     /**
      * @brief Get the backends name("Vulkan", "DirectX 11", "Metal", etc.), 

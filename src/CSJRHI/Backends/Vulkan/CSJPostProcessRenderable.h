@@ -3,23 +3,15 @@
 #include "ICSJRenderable.h"
 
 #include <memory>
+#include <mutex>
+#include <atomic>
+#include <array>
 
 #include <vulkan/vulkan.h>
 
 namespace csjrhi {
 
-    // ──────────────────────────────────────────────
-// Effect Types
-// ──────────────────────────────────────────────
-enum class PostProcessEffect {
-    None,           // Pass‑through
-    Tonemap,        // Reinhard tonemapping + gamma
-    Grayscale,      // Convert to grayscale
-    Invert,         // Invert colors
-    Sepia,          // Sepia tone
-    Blur,           // Simple blur (placeholder)
-    Bloom,          // Bloom (placeholder)
-};
+constexpr uint32_t post_process_max_frames = 2;
 
 class CSJPostProcessRenderable : public ICSJRenderable {
 public:
@@ -32,6 +24,8 @@ public:
     void render(void* commandHandle, float timeStamp) override;
     void onResize(uint32_t width, uint32_t height) override;
     void unInit() override;
+
+    void setEffectParam(CSJEffectParams effectParam);
 
     void transitionOffscreenToColorAttachment(VkCommandBuffer commandBuffer);
     void transitionOffscreenToShaderReadOnly(VkCommandBuffer commandBuffer);
@@ -64,9 +58,18 @@ public:
 
     void recreateOffscreenImage();
 protected:
+    struct EffectUniform {
+        VkBuffer       buffer = VK_NULL_HANDLE;
+        VkDeviceMemory memory = VK_NULL_HANDLE;
+        void*          buffer_mapped = nullptr;
+    };
+
     void createOffscreenResources();
     void destroyOffscreenResource();
     void createOffscreenFramebuffer();
+
+    void createEffectUniformBuffers();
+    void destroyEffectUniformBuffers();
 
     void createRenderPass();
     void createSampler();
@@ -81,6 +84,12 @@ private:
     void    *m_render_handler = nullptr;
     uint32_t m_width = 0;
     uint32_t m_height = 0;
+    uint32_t m_current_index = 0;
+
+    std::array<EffectUniform, post_process_max_frames> m_effectBuffers;
+
+    std::mutex        m_effectMtx;
+    CSJEffectParams   m_effectParam;
 
     VkFormat m_format = VK_FORMAT_UNDEFINED;
     // Offscreen resources
@@ -100,6 +109,7 @@ private:
     VkPipelineLayout      m_postProcessPipelineLayout       = VK_NULL_HANDLE;
     VkDescriptorSetLayout m_postProcessDescriptorSetLayout  = VK_NULL_HANDLE;
     VkDescriptorSet       m_postProcessDescriptorSet        = VK_NULL_HANDLE;
+    std::array<VkDescriptorSet, post_process_max_frames> m_descriptorSet;
 
     /* Just keep, not allocate and deallocate. */
     VkDevice         m_device          = VK_NULL_HANDLE;

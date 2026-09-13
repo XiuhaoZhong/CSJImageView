@@ -96,6 +96,15 @@ void CSJVulkanRenderer::DestroyTexture(uint32_t textureId) {
 void CSJVulkanRenderer::UpdateTexture(uint32_t textureId, const void *data) {
 }
 
+void CSJVulkanRenderer::setPostProcessEffect(CSJEffectParams effectParams) {
+    if (!m_postProcessRenderable) {
+        return ;
+    }
+
+    auto postProcessRenderable = std::dynamic_pointer_cast<CSJPostProcessRenderable>(m_postProcessRenderable);
+    postProcessRenderable->setEffectParam(effectParams);
+}
+
 std::string CSJVulkanRenderer::GetBackendName() const {
     return std::string();
 }
@@ -209,8 +218,6 @@ void CSJVulkanRenderer::createInstance() {
     if (m_enable_validation_Layers && !checkValidationLayerSupport()) {
         return;
     }
-
-    std::cout << " enter create instance function " << std::endl;
 
     // The followed info is mainly for debug tools such as RenderDoc and so on.
     // Remvoing the appInfo doesn't influence the rendering functionality.
@@ -696,6 +703,8 @@ void CSJVulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
         renderable->updateScene();
     }
 
+    m_postProcessRenderable->updateScene();
+
     CSJSpPostProcessRenderable postProcess = std::dynamic_pointer_cast<CSJPostProcessRenderable>(m_postProcessRenderable);
 
     //TransitionOffscreenToColorAttachment(commandBuffer);
@@ -1047,7 +1056,7 @@ void CSJVulkanRenderer::createDescriptorPoolForRenderables()
 
     // Combined image samplers (for graphics pipelines)
     poolSizes[0].type = VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER;
-    poolSizes[0].descriptorCount = 6;   // PNG(1) + YUV(3) + future(2)
+    poolSizes[0].descriptorCount = 7;   // PNG(1) + YUV(3) + future(2)
 
     // Storage images (for compute pipelines)
     poolSizes[1].type = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE;
@@ -1055,7 +1064,7 @@ void CSJVulkanRenderer::createDescriptorPoolForRenderables()
 
     // Uniform buffers (for compute and graphics)
     poolSizes[2].type = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER;
-    poolSizes[2].descriptorCount = 3;   // YUV compute(1) + future(1)
+    poolSizes[2].descriptorCount = 7;   // YUV compute(1) + future(1)
 
     // ------------------------------------------------------------
     // 2. Create the pool
@@ -1067,7 +1076,7 @@ void CSJVulkanRenderer::createDescriptorPoolForRenderables()
     poolInfo.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
 
     // Maximum number of descriptor sets that can be allocated
-    poolInfo.maxSets = 5;   // PNG(1) + YUV compute(1) + YUV graphics(1)
+    poolInfo.maxSets = 6;   // PNG(1) + YUV compute(1) + YUV graphics(1)
 
     // Point to the pool size array
     poolInfo.poolSizeCount = static_cast<uint32_t>(poolSizes.size());
