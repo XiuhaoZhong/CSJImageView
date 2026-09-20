@@ -61,6 +61,15 @@ public:
     float GetLastFrameTime() const override;
     const CSJRendererCapabilities& GetCapabilities() const override;
 
+    void* GetRendererInstance() const override;
+    void* GetPhysicalDevice() const override;
+    void* GetDevice() const override;
+    void* GetQueue() const override;
+    void* GetRenderPass() const override;
+    void* GetCurrentCommandBuffer() const;
+    void* GetDescriptorPool() const override;
+    uint32_t GetQueueFamilyIndex() override;
+
     std::vector<char> readFile(const std::string& filename);
     VkShaderModule createShaderModule(const std::vector<char>& code);
     void createBuffer(VkDeviceSize size,
@@ -186,6 +195,8 @@ protected:
     void createHelperResources();
     void destroyHelperResources();
 
+    void createDescriptorPoolForUI();
+
 private:
     CSJRenderType m_renderType = CSJRenderType::Common;
     void *m_pWindow;
@@ -236,6 +247,8 @@ private:
 
     CSJSpRenderable m_postProcessRenderable;
     std::vector<CSJSpRenderable> m_renderables;
+
+    VkDescriptorPool m_descriptor_pool_for_ui = VK_NULL_HANDLE;
 
 };
 

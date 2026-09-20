@@ -65,6 +65,10 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CSJIMAGEVIEW_ROOT_DIR}/build/lib/$<CONFIG>)
 
 add_subdirectory(${THIRD_PARTY_DIR})
 add_subdirectory(src/CSJRHI)
+add_subdirectory(src/CSJUILayer)
+
+
+target_link_libraries(${TARGET_NAME} PRIVATE CSJUILayer)
 
 include(GNUInstallDirs)
 install(TARGETS CSJImageView

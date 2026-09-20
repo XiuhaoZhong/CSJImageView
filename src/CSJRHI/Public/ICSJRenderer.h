@@ -94,6 +94,16 @@ public:
      *  @return Reference to a RendererCapabilities struct.
      */
     virtual const CSJRendererCapabilities& GetCapabilities() const = 0;
+
+
+    virtual void* GetRendererInstance() const = 0;
+    virtual void* GetPhysicalDevice() const = 0;
+    virtual void* GetDevice() const = 0;
+    virtual void* GetQueue() const = 0;
+    virtual void* GetRenderPass() const = 0;
+    virtual void* GetDescriptorPool() const = 0;
+    virtual void* GetCurrentCommandBuffer() const = 0;
+    virtual uint32_t GetQueueFamilyIndex() = 0;
 };
 
 // ============================================================

@@ -36,7 +36,7 @@ bool CSJYUVRenderable::init(void *rendererHanle) {
     createYUVPipeline();
     createYUVDescriptorSet();
 
-    return false;
+    return true;
 }
 
 bool CSJYUVRenderable::isReady() const {
@@ -62,6 +62,22 @@ void CSJYUVRenderable::render(void *commandHandle, float timeStamp) {
     auto *renderer = static_cast<CSJVulkanRenderer *>(m_render_handler);
     VkExtent2D curExtent = renderer->getSwapchainExtent();
     VkCommandBuffer commandBuffer = renderer->getCommandBuffer();
+
+    VkViewport viewport{};
+    viewport.x = 0.0f;
+    viewport.y = 0.0f;
+    viewport.width = static_cast<float>(renderer->getWindowWidth());
+    viewport.height = static_cast<float>(renderer->getWindowHeight());
+    viewport.minDepth = 0.0f;
+    viewport.maxDepth = 1.0f;
+
+    vkCmdSetViewport(commandBuffer, 0, 1, &viewport);
+
+    VkRect2D scissor{};
+    scissor.offset = {0, 0};
+    scissor.extent = {static_cast<uint32_t>(renderer->getWindowWidth()), static_cast<uint32_t>(renderer->getWindowHeight())};
+
+    vkCmdSetScissor(commandBuffer, 0, 1, &scissor);
 
     vkCmdBindPipeline(commandBuffer, VK_PIPELINE_BIND_POINT_GRAPHICS, m_yuvPipeline);
     vkCmdBindDescriptorSets(commandBuffer,
@@ -286,24 +302,20 @@ void CSJYUVRenderable::createYUVPipeline() {
     int windowHeight = renderer->getWindowHeight();
 
     // 5. Viewport and scissor
-    VkViewport viewport{};
-    viewport.x = 0.0f;
-    viewport.y = 0.0f;
-    viewport.width = static_cast<float>(windowWidth);
-    viewport.height = static_cast<float>(windowHeight);
-    viewport.minDepth = 0.0f;
-    viewport.maxDepth = 1.0f;
-
-    VkRect2D scissor{};
-    scissor.offset = {0, 0};
-    scissor.extent = {static_cast<uint32_t>(windowWidth), static_cast<uint32_t>(windowHeight)};
+    VkDynamicState dynamicStates[] = {
+        VK_DYNAMIC_STATE_VIEWPORT,
+        VK_DYNAMIC_STATE_SCISSOR
+    };
 
     VkPipelineViewportStateCreateInfo viewportState{};
     viewportState.sType         = VK_STRUCTURE_TYPE_PIPELINE_VIEWPORT_STATE_CREATE_INFO;
     viewportState.viewportCount = 1;
-    viewportState.pViewports    = &viewport;
     viewportState.scissorCount  = 1;
-    viewportState.pScissors     = &scissor;
+    
+    VkPipelineDynamicStateCreateInfo dynamicState{};
+    dynamicState.sType = VK_STRUCTURE_TYPE_PIPELINE_DYNAMIC_STATE_CREATE_INFO;
+    dynamicState.dynamicStateCount = 2;
+    dynamicState.pDynamicStates = dynamicStates;
 
     // 6. Rasterization
     VkPipelineRasterizationStateCreateInfo rasterizer{};
@@ -337,6 +349,7 @@ void CSJYUVRenderable::createYUVPipeline() {
     pipelineInfo.pVertexInputState   = &vertexInput;
     pipelineInfo.pInputAssemblyState = &inputAssembly;
     pipelineInfo.pViewportState      = &viewportState;
+    pipelineInfo.pDynamicState       = &dynamicState;
     pipelineInfo.pRasterizationState = &rasterizer;
     pipelineInfo.pMultisampleState   = &multisampling;
     pipelineInfo.pColorBlendState    = &colorBlending;
