@@ -118,6 +118,40 @@ const CSJRendererCapabilities &CSJVulkanRenderer::GetCapabilities() const {
     return m_renderCaps;
 }
 
+void *CSJVulkanRenderer::GetRendererInstance() const {
+    return reinterpret_cast<void *>(m_VkInstance);
+}
+
+void *CSJVulkanRenderer::GetPhysicalDevice() const {
+    return reinterpret_cast<void *>(m_physical_device);
+}
+
+void *CSJVulkanRenderer::GetDevice() const {
+    return reinterpret_cast<void *>(m_device);
+}
+
+void *CSJVulkanRenderer::GetQueue() const {
+    return reinterpret_cast<void *>(m_graphics_queue);
+}
+
+void *CSJVulkanRenderer::GetRenderPass() const {
+    return reinterpret_cast<void *>(m_render_pass);
+}
+
+void *CSJVulkanRenderer::GetCurrentCommandBuffer() const {
+    return reinterpret_cast<void *>(getCommandBuffer());
+}
+
+void *CSJVulkanRenderer::GetDescriptorPool() const {
+    // TODO: create a specific descriptor pool for UI rendering.
+    return reinterpret_cast<void *>(m_descriptor_pool_for_ui);
+}
+
+uint32_t CSJVulkanRenderer::GetQueueFamilyIndex() {
+    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_physical_device);
+    return queueFamilyIndices.m_graphics_family.value();
+}
+
 void CSJVulkanRenderer::initVulkan() {
 
     createInstance();
@@ -140,6 +174,8 @@ void CSJVulkanRenderer::initVulkan() {
     }
 
     createSyncObjects();
+
+    createDescriptorPoolForUI();
 }
 
 std::array<int, 2> CSJVulkanRenderer::getCurrentWindowSize() {
@@ -196,6 +232,11 @@ void CSJVulkanRenderer::cleanup() {
     }
 
     vkDestroyCommandPool(m_device, m_command_pool, nullptr);
+
+    if (m_descriptor_pool_for_ui) {
+        vkDestroyDescriptorPool(m_device, m_descriptor_pool_for_ui, nullptr);
+    }
+
     vkDestroyDevice(m_device, nullptr);
 
     vkDestroySurfaceKHR(m_VkInstance, m_surface, nullptr);
@@ -1123,6 +1164,32 @@ void CSJVulkanRenderer::destroyHelperResources() {
         m_helper_command_pool = VK_NULL_HANDLE;  // Already freed with the pool
         std::cout << "[VulkanRenderer] Upload command pool destroyed." << std::endl;
     }
+}
+
+void CSJVulkanRenderer::createDescriptorPoolForUI() {
+    if (m_descriptor_pool_for_ui != VK_NULL_HANDLE) {
+        return ;
+    }
+
+    VkDescriptorPoolSize pool_sizes[] = {
+        { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
+        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+        { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 }
+    };
+
+    VkDescriptorPoolCreateInfo pool_info = {};
+    pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
+    // 必须设置 FREE 标志，否则 ImGui 在移除纹理时会报错
+    pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
+    pool_info.maxSets = 1000;
+    pool_info.poolSizeCount = 3;
+    pool_info.pPoolSizes = pool_sizes;
+
+    if (vkCreateDescriptorPool(m_device, &pool_info, nullptr, &m_descriptor_pool_for_ui) != VK_SUCCESS) {
+        throw std::runtime_error("failed to create ImGui descriptor pool!");
+    }
+
+    std::cout << "UI descriptor pool: " << m_descriptor_pool_for_ui << std::endl;
 }
 
 } // namespace csjrhi

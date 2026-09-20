@@ -17,8 +17,9 @@
 #include <cstdlib>
 
 #include "CSJRendererLoader.h"
+#include "CSJUILayer.h"
 
-class CSJApplication {
+class CSJApplication : public csjuilayer::ICSJUILayerContextDelegate {
 public:
     CSJApplication() = default;
     ~CSJApplication() = default;
@@ -38,8 +39,12 @@ public:
 
     static void framebufferResiceCallback(GLFWwindow *window, int width, int height);
 
+    void fillContext(csjuilayer::CSJUILayerContext *context) override;
+    void* getCurrentCommandBuffer() override;
+
 protected:
     bool initRenderer();
+    bool initUILayer();
 
     void initWindow();
 
@@ -58,8 +63,11 @@ protected:
 private:
     GLFWwindow       *m_pWindow;
     bool              m_bFrameBufferResize = false;
-    csjrhi::ICSJRenderer     *m_pRenderer = nullptr;
+
+    csjrhi::ICSJRenderer   *m_pRenderer = nullptr;
     CSJRendererLoader m_rendererLoader;
+
+    csjuilayer::CSJUILayer *m_pUILayer = nullptr;
 
     bool m_enable_validation_Layers{ true };
     bool m_enable_debug_utils_label{ true };

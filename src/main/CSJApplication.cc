@@ -20,6 +20,7 @@
 #include "Utils/CSJPathTool.h"
 
 using namespace csjrhi;
+using namespace csjuilayer;
 
 const uint32_t WIDTH = 800;
 const uint32_t HEIGHT = 600;
@@ -31,6 +32,7 @@ void CSJApplication::run() {
 
     initWindow();
     initRenderer();
+    initUILayer();
     mainLoop();
     cleanup();
 }
@@ -67,6 +69,30 @@ void CSJApplication::framebufferResiceCallback(GLFWwindow *window, int width, in
     app->resizeFramebuffer(width, height);
 }
 
+void CSJApplication::fillContext(CSJUILayerContext *context) {
+    context->backendType = CSJBackendType::Vulkan;
+    context->instance = m_pRenderer->GetRendererInstance();
+    context->device = m_pRenderer->GetDevice();
+    context->physicalDevice = m_pRenderer->GetPhysicalDevice();
+    context->queue = m_pRenderer->GetQueue();
+    context->queueFamilyIndex = m_pRenderer->GetQueueFamilyIndex();
+    context->renderPass = m_pRenderer->GetRenderPass();
+    context->descriptorPool = m_pRenderer->GetDescriptorPool();
+
+    int width = 0, height = 0;
+    glfwGetFramebufferSize(m_pWindow, &width, &height);
+    context->width = width;
+    context->height = height;
+}
+
+void *CSJApplication::getCurrentCommandBuffer() {
+    if (!m_pRenderer) {
+        return nullptr;
+    }
+
+    return m_pRenderer->GetCurrentCommandBuffer();
+}
+
 bool CSJApplication::initRenderer() {
     std::string backendName = "CSJVulkanRenderer";
     //CSJRendererLoader loader;
@@ -99,6 +125,18 @@ bool CSJApplication::initRenderer() {
     }
 
     return res; 
+}
+
+bool CSJApplication::initUILayer() {
+    CSJUILayerContext context;
+
+    m_pUILayer = new CSJUILayer();
+    bool res = m_pUILayer->initialize(this, m_pWindow);
+    if (!res) {
+        std::cout << "CSJUILayer initialize failed!" << std::endl;
+    }
+
+    return res;
 }
 
 void CSJApplication::initWindow() {
@@ -136,6 +174,16 @@ void CSJApplication::mainLoop() {
         double deltaTimeMs = deltaTime * 1000.0;             //  transfer to millisecond.
 
         lastFrameTime = currentFrameTime;
+
+
+
+        if (m_pUILayer) {
+            m_pUILayer->beginFrame();
+
+            m_pUILayer->drawUI();
+
+            m_pUILayer->endFrame();
+        }
 
         if (m_pRenderer) {
             m_pRenderer->Render((float)deltaTimeMs);
