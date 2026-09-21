@@ -24,7 +24,7 @@ public:
     void endFrame();
     void drawUI();
     void render(void *cmd);
-    void shutDown();
+    void shutdown();
 
 protected:
     void initForVulkan();

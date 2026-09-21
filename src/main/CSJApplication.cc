@@ -93,6 +93,23 @@ void *CSJApplication::getCurrentCommandBuffer() {
     return m_pRenderer->GetCurrentCommandBuffer();
 }
 
+void CSJApplication::render(void *commandBuffer) {
+    if (m_pUILayer) {
+
+        m_pUILayer->beginFrame();
+
+        m_pUILayer->drawUI();
+
+        m_pUILayer->render(commandBuffer);
+    }
+}
+
+void CSJApplication::uiRendererShutdown() {
+    if (m_pUILayer) {
+        m_pUILayer->shutdown();
+    }
+}
+
 bool CSJApplication::initRenderer() {
     std::string backendName = "CSJVulkanRenderer";
     //CSJRendererLoader loader;
@@ -123,6 +140,8 @@ bool CSJApplication::initRenderer() {
     } else {
         std::cout << "[HostApp] Succeed to initialize renderer!" << std::endl;
     }
+
+    m_pRenderer->setUIRendererDelegate(this);
 
     return res; 
 }
@@ -174,16 +193,6 @@ void CSJApplication::mainLoop() {
         double deltaTimeMs = deltaTime * 1000.0;             //  transfer to millisecond.
 
         lastFrameTime = currentFrameTime;
-
-
-
-        if (m_pUILayer) {
-            m_pUILayer->beginFrame();
-
-            m_pUILayer->drawUI();
-
-            m_pUILayer->endFrame();
-        }
 
         if (m_pRenderer) {
             m_pRenderer->Render((float)deltaTimeMs);

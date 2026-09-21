@@ -38,6 +38,10 @@ CSJVulkanRenderer::~CSJVulkanRenderer() {
 
 }
 
+void CSJVulkanRenderer::setUIRendererDelegate(ICSJUIRendererDelegate *delegate) {
+    m_pUIRenderer = delegate;
+}
+
 bool CSJVulkanRenderer::Init(void *windowHandle, int width, int height) {
     if (!windowHandle || width == 0 || height == 0) {
         return false;
@@ -204,12 +208,19 @@ void CSJVulkanRenderer::cleanup() {
         
     }
 
+    if (m_pUIRenderer) {
+        m_pUIRenderer->uiRendererShutdown();
+    }
+
     cleanupSwapChain();
 
     vkDestroyRenderPass(m_device, m_render_pass, nullptr);
 
     vkDestroyDescriptorPool(m_device, m_descriptor_pool, nullptr);
     vkDestroyDescriptorPool(m_device, m_descripotrPoolForRenderables, nullptr);
+    if (m_descriptor_pool_for_ui) {
+        vkDestroyDescriptorPool(m_device, m_descriptor_pool_for_ui, nullptr);
+    }
 
     if (m_renderType == CSJRenderType::Renderable) {
         auto it = m_renderables.begin();
@@ -233,9 +244,7 @@ void CSJVulkanRenderer::cleanup() {
 
     vkDestroyCommandPool(m_device, m_command_pool, nullptr);
 
-    if (m_descriptor_pool_for_ui) {
-        vkDestroyDescriptorPool(m_device, m_descriptor_pool_for_ui, nullptr);
-    }
+
 
     vkDestroyDevice(m_device, nullptr);
 
@@ -805,6 +814,10 @@ void CSJVulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
         m_postProcessRenderable->render(nullptr, 0.0);
     }
 
+    if (m_pUIRenderer) {
+        m_pUIRenderer->render(static_cast<void *>(commandBuffer));
+    }
+
     vkCmdEndRenderPass(commandBuffer);
 
     if (vkEndCommandBuffer(commandBuffer) != VK_SUCCESS) {
@@ -1173,13 +1186,13 @@ void CSJVulkanRenderer::createDescriptorPoolForUI() {
 
     VkDescriptorPoolSize pool_sizes[] = {
         { VK_DESCRIPTOR_TYPE_SAMPLER, 1000 },
-        {VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000},
+        { VK_DESCRIPTOR_TYPE_SAMPLED_IMAGE, 1000 },
         { VK_DESCRIPTOR_TYPE_COMBINED_IMAGE_SAMPLER, 1000 }
     };
 
     VkDescriptorPoolCreateInfo pool_info = {};
     pool_info.sType = VK_STRUCTURE_TYPE_DESCRIPTOR_POOL_CREATE_INFO;
-    // 必须设置 FREE 标志，否则 ImGui 在移除纹理时会报错
+    // must set FREE flag, or there will be error when ImGui remove textures.
     pool_info.flags = VK_DESCRIPTOR_POOL_CREATE_FREE_DESCRIPTOR_SET_BIT;
     pool_info.maxSets = 1000;
     pool_info.poolSizeCount = 3;
@@ -1189,7 +1202,6 @@ void CSJVulkanRenderer::createDescriptorPoolForUI() {
         throw std::runtime_error("failed to create ImGui descriptor pool!");
     }
 
-    std::cout << "UI descriptor pool: " << m_descriptor_pool_for_ui << std::endl;
 }
 
 } // namespace csjrhi

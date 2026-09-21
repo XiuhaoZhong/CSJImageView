@@ -9,10 +9,18 @@ namespace csjrhi {
 
 struct CSJRendererCapabilities;
 
+class ICSJUIRendererDelegate {
+public:
+    virtual void render(void* commandBuffer) = 0;
+    virtual void uiRendererShutdown() = 0;
+};
+
 class ICSJRenderer {
 public:
     ICSJRenderer() = default;
     virtual ~ICSJRenderer() = default;
+
+    virtual void setUIRendererDelegate(ICSJUIRendererDelegate *delegate) = 0;
 
     /**
      * @brief Initialize renderer. 

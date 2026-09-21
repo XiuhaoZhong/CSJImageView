@@ -48,6 +48,8 @@ public:
     CSJVulkanRenderer() = default;
     ~CSJVulkanRenderer();
 
+    void setUIRendererDelegate(ICSJUIRendererDelegate *delegate) ;
+
     bool Init(void* windowHandle, int width, int height) override;
     void Shutdown() override;
     void Resize(int width, int height) override;
@@ -249,6 +251,8 @@ private:
     std::vector<CSJSpRenderable> m_renderables;
 
     VkDescriptorPool m_descriptor_pool_for_ui = VK_NULL_HANDLE;
+
+    ICSJUIRendererDelegate *m_pUIRenderer = nullptr;
 
 };
 
