@@ -58,13 +58,13 @@ void CSJUILayer::render(void *cmd) {
         return ;
     }
 
-    VkCommandBuffer commandBuffer = static_cast<VkCommandBuffer>(m_pDelegate->getCurrentCommandBuffer());
+    VkCommandBuffer commandBuffer = static_cast<VkCommandBuffer>(cmd);
 
     ImGui::Render();
     ImGui_ImplVulkan_RenderDrawData(ImGui::GetDrawData(), commandBuffer);
 }
 
-void CSJUILayer::shutDown() {
+void CSJUILayer::shutdown() {
     if (!m_bInit) {
         return ;
     }
@@ -75,15 +75,15 @@ void CSJUILayer::shutDown() {
 }
 
 void CSJUILayer::initForVulkan() {
-    // 1. 创建 ImGui 上下文
+    // create ImGui context.
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGui::StyleColorsDark();
 
-    // 2. 初始化 GLFW 平台后端
+    // initialize GLFW backend.
     ImGui_ImplGlfw_InitForVulkan(m_pWindow, true);
 
-    // 3. 填充 Vulkan 初始化信息（从 context 中转换 void*）
+    // Fill context from renderer.
     ImGui_ImplVulkan_InitInfo init_info = {};
     init_info.Instance = static_cast<VkInstance>(m_context.instance);
     init_info.PhysicalDevice = static_cast<VkPhysicalDevice>(m_context.physicalDevice);
@@ -95,7 +95,7 @@ void CSJUILayer::initForVulkan() {
     init_info.ImageCount = 2;
     init_info.PipelineInfoMain.RenderPass = static_cast<VkRenderPass>(m_context.renderPass);
 
-    // 4. 初始化 Vulkan 后端
+    // Initialize Vulkan backend.
     if (!ImGui_ImplVulkan_Init(&init_info)) {
         std::cerr << "ImGui initialize failed!" << std::endl;
     }

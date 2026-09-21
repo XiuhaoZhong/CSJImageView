@@ -8,7 +8,7 @@
 #include <iostream>
 
 // ============================================================
-// 平台检测宏（用于选择后端）
+// Plaform Macro, used to check backends.
 // ============================================================
 #if defined(_WIN32) || defined(_WIN64)
     #define PLATFORM_WINDOWS 1
@@ -27,9 +27,9 @@
 // 或者直接包含后端的 .cpp 文件（如果是静态链接）
 
 #ifdef PLATFORM_WINDOWS
-    // Windows 上默认使用 Vulkan，也可以切换为 DX11
+    // Windows Vulkan default，and can switch to DX11 too.
     #include "../Backends/Vulkan/CSJVulkanRenderer.h"
-    // #include "Backends/DX11/DX11Renderer.h"  // 如果需要 DX11
+    // #include "Backends/DX11/DX11Renderer.h"  // DX11 needed.
 #elif PLATFORM_MACOS
     //#include "Backends/Metal/MetalRenderer.h"
 #elif PLATFORM_LINUX
@@ -56,8 +56,8 @@ CSJRHI_API ICSJRenderer* CreateRenderer() {
     ICSJRenderer* renderer = nullptr;
 
 #if defined(PLATFORM_WINDOWS)
-    // Windows 平台：优先使用 Vulkan
-    // 可以在这里添加环境变量或配置来决定使用哪个后端
+    // Windows: vulkan pirority.
+    // You can specific the backend from environment variables.
     const char* forceBackend = "vulkan";//std::getenv("MINI_RENDERER_BACKEND");
     
     if (forceBackend) {

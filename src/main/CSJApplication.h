@@ -18,8 +18,10 @@
 
 #include "CSJRendererLoader.h"
 #include "CSJUILayer.h"
+#include "ICSJRenderer.h"
 
-class CSJApplication : public csjuilayer::ICSJUILayerContextDelegate {
+class CSJApplication : public csjuilayer::ICSJUILayerContextDelegate,
+                       public csjrhi::ICSJUIRendererDelegate {
 public:
     CSJApplication() = default;
     ~CSJApplication() = default;
@@ -41,6 +43,9 @@ public:
 
     void fillContext(csjuilayer::CSJUILayerContext *context) override;
     void* getCurrentCommandBuffer() override;
+
+    void render(void* commandBuffer) override;
+    void uiRendererShutdown() override;
 
 protected:
     bool initRenderer();
