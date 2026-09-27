@@ -17,6 +17,8 @@
 
 #include "stb_image.h"
 
+#include "CSJLogger.h"
+
 #include "CSJImageRenderable.h"
 #include "CSJYUVRenderable.h"
 #include "CSJPostProcessRenderable.h"

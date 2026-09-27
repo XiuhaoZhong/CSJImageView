@@ -9,13 +9,19 @@
 #endif
 
 #ifdef _WIN32
-
+#include <windows.h>
+#include <shellapi.h>
 #else
 #include <sys/stat.h>
 #include <errno.h>
 #endif
 
+#include "CSJStringUtils.h"
+
 namespace csjutils {
+
+static fs::path getCurrentWorkingPath();
+static std::string getCurrentWorkingPathString();
 
 void makePath(const char* path) {
     
@@ -48,7 +54,18 @@ static fs::path getAppResourcePath() {
 
 fs::path CSJPathTool::m_workPath = fs::path();
 
-bool CSJPathTool::createPath(std::string& path) {
+fs::path CSJPathTool::getWorkingPath()
+{
+    return getCurrentWorkingPath();
+}
+
+std::string CSJPathTool::getWorkingPathString()
+{
+    return getCurrentWorkingPathString();
+}
+
+bool CSJPathTool::createPath(std::string &path)
+{
     if (path.empty()) {
         return false;
     }
@@ -185,4 +202,41 @@ std::string CSJPathTool::join(const std::string & dir, const std::string & name)
     return std::string();
 }
 
+#if defined(__APPLE__)
+
+static fs::path getCurrentWorkingPath() {
+    return fs::path();
+}
+
+static std::string getCurrentWorkingPathString() {
+    return std::string();
+}
+
+#elif defined(_WIN32)
+
+static fs::path getCurrentWorkingPath() {
+
+    std::string pathString = getCurrentWorkingPathString();
+
+    return fs::path(pathString);
+}
+
+static std::string getCurrentWorkingPathString() {
+    LPWSTR cmdLine = GetCommandLineW();
+
+    int argc = 0;
+    LPWSTR *argvW = CommandLineToArgvW(cmdLine, &argc);
+
+    if (!argvW) {
+        return std::string();
+    }
+
+    std::wstring pathW(argvW[0]);
+
+    std::string workingPath = CSJStringUtil::wstring2string(pathW);
+
+    return workingPath;
+}
+
+#endif
 } // namespace csjutils 

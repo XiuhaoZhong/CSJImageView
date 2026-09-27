@@ -30,7 +30,7 @@ set(VULKAN_SRC
     CSJYUVRenderable.cc
     CSJPostProcessRenderable.cc
     ${CSJRHI_ROOT_DIR}/Public/CSJRendererFactory.cc
-    )
+)
 
 add_library(${TARGET_NAME} SHARED
             ${VULKAN_SRC})
@@ -49,7 +49,9 @@ target_include_directories(${TARGET_NAME} PRIVATE
 
 target_link_libraries(${TARGET_NAME} PUBLIC
                       Vulkan::Vulkan
-                      ${CMAKE_DL_LIBS})
+                      ${CMAKE_DL_LIBS}
+                      CSJUtils
+)
 
 set_target_properties(${TARGET_NAME} PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY ${CMAKE_RUNTIME_OUTPUT_DIRECTORY}

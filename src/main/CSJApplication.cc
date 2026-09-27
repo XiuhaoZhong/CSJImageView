@@ -17,7 +17,8 @@
 
 #include <GLFW/glfw3native.h>
 
-#include "Utils/CSJPathTool.h"
+#include "CSJPathTool.h"
+#include "CSJLogger.h"
 
 using namespace csjrhi;
 using namespace csjuilayer;

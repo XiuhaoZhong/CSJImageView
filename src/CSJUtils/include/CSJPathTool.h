@@ -14,6 +14,9 @@ namespace csjutils {
 
 class CSJUTILS_API CSJPathTool {
 public:
+    static fs::path    getWorkingPath();
+    static std::string getWorkingPathString();
+
     /**
      * @brief This function can create directories recursively.
      */
