@@ -5,6 +5,8 @@
 #include "ImGui/backends/imgui_impl_glfw.h"
 #include "ImGui/backends/imgui_impl_vulkan.h"
 
+#include "CSJLogger.h"
+
 namespace csjuilayer {
 
 bool CSJUILayer::initialize(ICSJUILayerContextDelegate *delegate, GLFWwindow *window) {

@@ -18,8 +18,6 @@ set(PROJECT_SOURCES
     src/main/CSJApplication.cc
     src/main/CSJRendererLoader.h
     src/main/CSJRendererLoader.cc
-    src/Utils/CSJPathTool.h
-    src/Utils/CSJPathTool.cc
 )
 
 message(STATUS "src files = ${PROJECT_SOURCES}")
@@ -34,7 +32,7 @@ set(Native_LIBS )
 endif()
 
 add_executable(${TARGET_NAME}
-            ${PROJECT_SOURCES}
+    ${PROJECT_SOURCES}
 )
 
 target_include_directories(${TARGET_NAME} PRIVATE
@@ -64,11 +62,19 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CSJIMAGEVIEW_ROOT_DIR}/build/bin/$<CONFIG>)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CSJIMAGEVIEW_ROOT_DIR}/build/lib/$<CONFIG>)
 
 add_subdirectory(${THIRD_PARTY_DIR})
+add_subdirectory(src/CSJUtils)
 add_subdirectory(src/CSJRHI)
 add_subdirectory(src/CSJUILayer)
 
+target_link_libraries(${TARGET_NAME} PRIVATE CSJUILayer CSJUtils)
 
-target_link_libraries(${TARGET_NAME} PRIVATE CSJUILayer)
+add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E copy_directory
+        "${CSJIMAGEVIEW_ROOT_DIR}/resources"
+        "$<TARGET_FILE_DIR:${TARGET_NAME}>/resources"
+    COMMENT "Copying assets to output directory"
+)
+
 
 include(GNUInstallDirs)
 install(TARGETS CSJImageView
