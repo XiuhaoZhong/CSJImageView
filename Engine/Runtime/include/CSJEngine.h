@@ -23,7 +23,7 @@ public:
     void shutdown();
 
 private:
-    std::shared_ptr<CSJRuntimeGlobalContext> m_pContext;
+    CSJRuntimeGlobalContext *m_pContext = nullptr;
 
     int m_fps = 0;
     int m_frameCount = 0;

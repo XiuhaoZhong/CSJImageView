@@ -6,6 +6,10 @@
 #include "CSJRenderSystem.h"
 
 namespace csjruntime {
+CSJRuntimeGlobalContext *CSJRuntimeGlobalContext::getInstance() {
+    static CSJRuntimeGlobalContext global_context;
+    return &global_context;
+}
 
 void CSJRuntimeGlobalContext::startSystem() {
     m_pWindowSystem = std::make_shared<CSJWindowSystem>();

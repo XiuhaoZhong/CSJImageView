@@ -12,6 +12,8 @@ public:
     CSJRuntimeGlobalContext() = default;
     ~CSJRuntimeGlobalContext() = default;
 
+    static CSJRuntimeGlobalContext* getInstance();
+
     void startSystem();
     void shutdownSystem();
 
@@ -24,7 +26,6 @@ public:
     }
 
 protected:
-
 
 private:
     std::shared_ptr<CSJWindowSystem> m_pWindowSystem{nullptr};

@@ -31,7 +31,6 @@ target_compile_definitions(${TARGET_NAME} PRIVATE CSJRHI_EXPORTS)
 message(STATUS "ICSJRenderer path = ${CSJRHI_ROOT_DIR}/Public")
 
 target_include_directories(${TARGET_NAME} PRIVATE
-    ${CSJIMAGEVIEW_ROOT_DIR}/Utils 
     ${THIRD_PARTY_DIR}/
     ${THIRD_PARTY_DIR}/stbi/ 
     ${Vulkan_DIR}/Include
@@ -41,8 +40,8 @@ target_include_directories(${TARGET_NAME} PRIVATE
 
 target_link_libraries(${TARGET_NAME} PUBLIC
                       Vulkan::Vulkan
-                      ${CMAKE_DL_LIBS}
                       CSJUtils
+                      ${CMAKE_DL_LIBS}
 )
 
 set_target_properties(${TARGET_NAME} PROPERTIES

@@ -44,8 +44,8 @@ CSJVulkanRenderer::~CSJVulkanRenderer() {
 
 }
 
-void CSJVulkanRenderer::setUIRendererDelegate(ICSJUIRendererDelegate *delegate) {
-    m_pUIRenderer = delegate;
+void CSJVulkanRenderer::setUIPass(ICSJUIPass *uiPass) {
+    m_pUIPass = uiPass;
 }
 
 bool CSJVulkanRenderer::Init(void *windowHandle, int width, int height) {
@@ -144,7 +144,24 @@ const CSJRendererCapabilities &CSJVulkanRenderer::GetCapabilities() const {
     return m_renderCaps;
 }
 
-void *CSJVulkanRenderer::GetRendererInstance() const {
+CSJUIPassContext CSJVulkanRenderer::getUIRenderContext() {
+    CSJUIPassContext context;
+
+    context.instance       = reinterpret_cast<void*>(m_VkInstance);
+    context.device         = reinterpret_cast<void*>(m_device);
+    context.physicalDevice = reinterpret_cast<void*>(m_physical_device);
+    context.descriptorPool = reinterpret_cast<void*>(m_descriptor_pool_for_ui);
+    context.queue          = reinterpret_cast<void *>(m_graphics_queue);
+    context.renderPass     = reinterpret_cast<void *>(m_render_pass);
+
+    QueueFamilyIndices queueFamilyIndices = findQueueFamilies(m_physical_device);
+    context.queueFamilyIndex = queueFamilyIndices.m_graphics_family.value();
+
+    return context;
+}
+
+void *CSJVulkanRenderer::GetRendererInstance() const
+{
     return reinterpret_cast<void *>(m_VkInstance);
 }
 
@@ -235,8 +252,8 @@ void CSJVulkanRenderer::cleanup() {
         
     }
 
-    if (m_pUIRenderer) {
-        m_pUIRenderer->uiRendererShutdown();
+    if (m_pUIPass) {
+        m_pUIPass->shutdown();
     }
 
     cleanupSwapChain();
@@ -810,8 +827,8 @@ void CSJVulkanRenderer::recordCommandBuffer(VkCommandBuffer commandBuffer, uint3
         m_postProcessRenderable->render(nullptr, 0.0);
     }
 
-    if (m_pUIRenderer) {
-        m_pUIRenderer->render(static_cast<void *>(commandBuffer));
+    if (m_pUIPass) {
+        m_pUIPass->render(static_cast<void *>(commandBuffer));
     }
 
     vkCmdEndRenderPass(commandBuffer);

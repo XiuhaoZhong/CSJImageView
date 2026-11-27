@@ -2,7 +2,9 @@
 
 #include <iostream>
 
+#include "CSJRuntimeGlobalContext.h"
 #include "CSJWindowSystem.h"
+#include "CSJWindowUI/CSJUIPassImpl.h"
 
 namespace csjruntime {
 CSJRenderSystem::~CSJRenderSystem() {
@@ -36,6 +38,23 @@ void CSJRenderSystem::finalize() {
         m_renderLoader.DestroyRenderer(m_pRenderer);
         m_pRenderer = nullptr;
     }
+}
+
+void CSJRenderSystem::setWindowUIBackend(ICSJWindowUI *windowUI) {
+    if (!windowUI) {
+        return ;
+    }
+
+    CSJUIPassContext uiPassContext = m_pRenderer->getUIRenderContext();
+
+    GLFWwindow *window = CSJRuntimeGlobalContext::getInstance()->getWindowSystem()->getWindow();
+    m_pUIPassImpl = std::make_shared<CSJUIPassImpl>();
+    bool res = m_pUIPassImpl->initialize(windowUI, &uiPassContext, window);
+    if (!res) {
+        std::cout << "UIPass implementation initilize failed!" << std::endl;
+    }
+
+    m_pRenderer->setUIPass(m_pUIPassImpl.get());
 }
 
 void CSJRenderSystem::tick(float timeStamp) {
