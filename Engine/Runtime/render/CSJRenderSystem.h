@@ -1,5 +1,7 @@
 #pragma once 
 
+#include "CSJRuntime_Export.h"
+
 #include "CSJRendererLoader.h"
 
 namespace csjrhi {
@@ -12,7 +14,7 @@ class CSJWindowSystem;
 class ICSJWindowUI;
 class CSJUIPassImpl;
 
-class CSJRenderSystem {
+class CSJRUNTIME_API CSJRenderSystem {
 public:
     CSJRenderSystem() = default;
     ~CSJRenderSystem();

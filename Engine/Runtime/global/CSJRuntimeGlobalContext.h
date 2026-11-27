@@ -2,12 +2,14 @@
 
 #include <memory>
 
+#include "CSJRuntime_Export.h"
+
 namespace csjruntime {
 
 class CSJWindowSystem;
 class CSJRenderSystem;
 
-class CSJRuntimeGlobalContext {
+class CSJRUNTIME_API CSJRuntimeGlobalContext {
 public:
     CSJRuntimeGlobalContext() = default;
     ~CSJRuntimeGlobalContext() = default;

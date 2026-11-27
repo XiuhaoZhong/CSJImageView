@@ -2,10 +2,7 @@
 
 #include <GLFW/glfw3.h>
 
-#include "CSJUIPassContext.h"
 #include "ICSJUIPass.h"
-
-#include "ImGui/imgui.h"
 
 using csjrhi::CSJUIPassContext;
 
