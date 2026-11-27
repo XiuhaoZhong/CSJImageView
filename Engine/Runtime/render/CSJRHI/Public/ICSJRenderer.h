@@ -4,37 +4,21 @@
 #include <string>
 #include <array>
 
+#include "CSJRenderContextDefinition.h"
+
 #include "ICSJRenderable.h"
+#include "ICSJUIPass.h"
 
 namespace csjrhi {
 
 struct CSJRendererCapabilities;
-
-enum class CSJGraphicBackend {
-    CSJGraphicBackend_Vulkan,
-    CSJGraphicBackend_DirectX11,
-    CSJGraphicBackend_DirectX12,
-    CSJGraphicBackend_Metal
-};
-
-struct CSJSurfaceHandle {
-    CSJGraphicBackend backend;
-    void *ptr = nullptr;
-    uint64_t handle = 0;
-};
-
-class ICSJUIRendererDelegate {
-public:
-    virtual void render(void* commandBuffer) = 0;
-    virtual void uiRendererShutdown() = 0;
-};
 
 class ICSJRenderer {
 public:
     ICSJRenderer() = default;
     virtual ~ICSJRenderer() = default;
 
-    virtual void setUIRendererDelegate(ICSJUIRendererDelegate *delegate) = 0;
+    virtual void setUIPass(ICSJUIPass *uiPass) = 0;
 
     /**
      * @brief Initialize renderer. 
@@ -120,6 +104,13 @@ public:
      *  @return Reference to a RendererCapabilities struct.
      */
     virtual const CSJRendererCapabilities& GetCapabilities() const = 0;
+
+    /**
+     * @brief Get Render context for UI rendering.
+     * 
+     * @return UI rendering context.
+     */
+    virtual CSJUIPassContext getUIRenderContext() = 0;
 
     virtual void* GetRendererInstance() const = 0;
     virtual void* GetPhysicalDevice() const = 0;

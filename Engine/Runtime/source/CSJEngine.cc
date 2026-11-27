@@ -13,7 +13,7 @@ namespace csjruntime {
 
 bool CSJEngine::initlize() {
 
-    m_pContext = std::make_shared<CSJRuntimeGlobalContext>();
+    m_pContext = CSJRuntimeGlobalContext::getInstance();
     m_pContext->startSystem();
 
     return true;

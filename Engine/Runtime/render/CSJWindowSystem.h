@@ -11,7 +11,7 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
-#include "ICSJRenderer.h"
+#include "CSJRenderContextDefinition.h"
 
 namespace csjruntime {
 
@@ -24,6 +24,9 @@ public:
 
     void* getInstacne();
     void* getSurface();
+    GLFWwindow* getWindow() {
+        return m_pWindow;
+    }
 
     std::array<int, 2> getWindowSize();
 

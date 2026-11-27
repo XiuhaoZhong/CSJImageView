@@ -14,6 +14,9 @@ set(PROJECT_SOURCES
     Editor/main/main.cc
     Editor/main/CSJEditor.h
     Editor/main/CSJEditor.cc
+    Editor/main/CSJEditorUI.h
+    Editor/main/CSJEditorUI.cc
+
 )
 
 if(CMAKE_HOST_WIN32)
@@ -51,9 +54,8 @@ endif()
 add_subdirectory(${THIRD_PARTY_DIR})
 add_subdirectory(CSJUtils)
 add_subdirectory(Runtime)
-add_subdirectory(CSJUILayer)
 
-target_link_libraries(${TARGET_NAME} PRIVATE CSJUILayer CSJUtils CSJRuntime)
+target_link_libraries(${TARGET_NAME} PRIVATE CSJUtils CSJRuntime)
 
 add_custom_command(TARGET ${TARGET_NAME} POST_BUILD
     COMMAND ${CMAKE_COMMAND} -E copy_directory

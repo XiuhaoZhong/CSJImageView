@@ -48,7 +48,7 @@ public:
     CSJVulkanRenderer() = default;
     ~CSJVulkanRenderer();
 
-    void setUIRendererDelegate(ICSJUIRendererDelegate *delegate) ;
+    void setUIPass(ICSJUIPass *uiPass) override;
 
     bool Init(void* windowHandle, int width, int height) override;
     bool initialize(void *instance, void *windowSurface, std::array<int, 2> windowSize) override;
@@ -65,6 +65,7 @@ public:
     float GetLastFrameTime() const override;
     const CSJRendererCapabilities& GetCapabilities() const override;
 
+    CSJUIPassContext getUIRenderContext() override;
     void* GetRendererInstance() const override;
     void* GetPhysicalDevice() const override;
     void* GetDevice() const override;
@@ -252,7 +253,7 @@ private:
 
     VkDescriptorPool m_descriptor_pool_for_ui = VK_NULL_HANDLE;
 
-    ICSJUIRendererDelegate *m_pUIRenderer = nullptr;
+    ICSJUIPass *m_pUIPass = nullptr;
 
 };
 
