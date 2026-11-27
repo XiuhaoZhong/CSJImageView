@@ -151,3 +151,11 @@ namespace ImGui
     void MyFunction(const char* name, MyMatrix44* mtx);
 }
 */
+
+#if defined(_WIN32)
+#  if defined(IMGUI_EXPORTS)
+#    define IMGUI_API __declspec(dllexport)
+#  else
+#    define IMGUI_API __declspec(dllimport)
+#  endif
+#endif

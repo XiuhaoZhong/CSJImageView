@@ -16,7 +16,6 @@ set(PROJECT_SOURCES
     Editor/main/CSJEditor.cc
     Editor/main/CSJEditorUI.h
     Editor/main/CSJEditorUI.cc
-
 )
 
 if(CMAKE_HOST_WIN32)

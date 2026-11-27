@@ -11,11 +11,13 @@
 #define GLFW_INCLUDE_VULKAN
 #include <GLFW/glfw3.h>
 
+#include "CSJRuntime_Export.h"
+
 #include "CSJRenderContextDefinition.h"
 
 namespace csjruntime {
 
-class CSJWindowSystem {
+class CSJRUNTIME_API CSJWindowSystem {
 public:
     CSJWindowSystem();
     ~CSJWindowSystem();

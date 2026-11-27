@@ -219,23 +219,11 @@ void CSJVulkanRenderer::initVulkan() {
 }
 
 std::array<int, 2> CSJVulkanRenderer::getCurrentWindowSize() {
-
     VkSurfaceCapabilitiesKHR capas{};
     vkGetPhysicalDeviceSurfaceCapabilitiesKHR(m_physical_device, m_surface, &capas);
     if (capas.currentExtent.width != UINT32_MAX) {
         return {(int)capas.currentExtent.width, (int)capas.currentExtent.height};
     }
-
-
-    // if (!m_pWindow) {
-    //     return {0, 0};
-    // }
-
-#ifdef _WIN32
-    RECT rect;
-    GetClientRect((HWND)m_pWindow, &rect);
-    return {rect.right - rect.left, rect.bottom - rect.top};
-#endif
 
     return {0, 0};
 }
@@ -947,7 +935,6 @@ VkRenderPass CSJVulkanRenderer::getPostprocessRenderPass() const {
 
 void CSJVulkanRenderer::drawFrame(float timeStamp) {
     vkWaitForFences(m_device, 1, &m_in_flight_fences[m_current_frame], VK_TRUE, UINT64_MAX);
-    vkResetFences(m_device, 1, &m_in_flight_fences[m_current_frame]);
 
     uint32_t imageIndex;
     VkResult result = vkAcquireNextImageKHR(m_device,
@@ -969,6 +956,9 @@ void CSJVulkanRenderer::drawFrame(float timeStamp) {
         std::cout << "Require next image failed!" << std::endl;
         return ;
     }
+
+    // Only vkAcquireNextImageKHR successfully and have command committed, can reset the fences.
+    vkResetFences(m_device, 1, &m_in_flight_fences[m_current_frame]);
 
     vkResetCommandBuffer(m_command_buffers[m_current_frame], 0);
     recordCommandBuffer(m_command_buffers[m_current_frame], imageIndex, timeStamp);

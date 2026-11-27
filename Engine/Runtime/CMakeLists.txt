@@ -46,7 +46,7 @@ add_library(${TARGET_NAME} SHARED
             ${Window_UI_Source_files}
 )
 
-target_compile_definitions(${TARGET_NAME} PRIVATE CSJRUNTIME_EXPORTS)
+target_compile_definitions(${TARGET_NAME} PRIVATE CSJRUNTIME_EXPORTS IMGUI_EXPORTS)
 
 target_include_directories(${TARGET_NAME} PUBLIC 
     ${RUNTIME_ROOT_DIR}/include

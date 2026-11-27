@@ -1,5 +1,6 @@
 #include "CSJWindowSystem.h"
 
+#include <vector>
 #include <iostream>
 
 #ifdef __APPLE__
@@ -17,7 +18,7 @@ using namespace csjrhi;
 namespace csjruntime {
 
 CSJWindowSystem::CSJWindowSystem() {
-
+    m_graphicBackend = CSJGraphicBackend::CSJGraphicBackend_Vulkan;
 }
 
 CSJWindowSystem::~CSJWindowSystem() {
